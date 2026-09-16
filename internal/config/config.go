@@ -41,6 +41,10 @@ type State struct {
 	LastCheck            time.Time `json:"last_check"`
 	LastNotifiedVersion  string    `json:"last_notified_version"`
 	LastNotFoundNotified time.Time `json:"last_not_found_notified"`
+	CachedAssetName      string    `json:"cached_asset_name"`
+	CachedAssetURL       string    `json:"cached_asset_url"`
+	CachedMinisigName    string    `json:"cached_minisig_name"`
+	CachedMinisigURL     string    `json:"cached_minisig_url"`
 }
 
 // Paths locates config/state/log files.

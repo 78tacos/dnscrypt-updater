@@ -29,10 +29,14 @@ Version detection tries `dnscrypt-proxy -version` then `--version` (wiki / commo
 ## Safety (v1)
 
 - Poll GitHub Releases and compare to the local CLI version (or your override).
-- If remote > local: desktop notification + tray badge/menu. The action **Open GitHub release page** opens the official tag page.
-- No auto-install, no zip apply, no minisign-and-swap, no service restart.
+- If remote > local: desktop notification + tray badge/menu. The action **Open GitHub release page** opens the official tag page (signed zip/tar.gz + `.minisig` live there).
+- No auto-install, no zip apply, no minisign-and-swap, no service restart, no NIC DNS changes.
 - If the binary is missing, the app reports **not found** and does not invent a version. Set `binary_path` or `current_version`.
-- Official assets are minisign-signed (`RWTk1xXqcTODeYttYMCMLo0YJHaFEHn7a3akqHlb/7QvIQXHVPxKbjB5`). Verification belongs in a future *apply* flow, not v1.
+- Official archives are minisign-signed. Pubkey `RWTk1xXqcTODeYttYMCMLo0YJHaFEHn7a3akqHlb/7QvIQXHVPxKbjB5` (also DNSSEC TXT `dnscrypt-proxy.key.dnscrypt.info`). v1 **names** the matching asset; it does not download or verify it.
+
+Homepage: [dnscrypt.info](https://dnscrypt.info). Prefer GitHub Releases (or package managers that track them). [dnscrypt.org](https://www.dnscrypt.org/) warns against unofficial/torrent “DNSCrypt client” downloads.
+
+A later apply-update flow (out of scope) would follow the wiki: minisign verify → `dnscrypt-proxy -config old.toml -check` → replace binary only → restart service, keeping a `.old` rollback. v1 never does that.
 
 ---
 
@@ -78,7 +82,9 @@ ARM64:
 GOOS=windows GOARCH=arm64 CGO_ENABLED=0 go build -ldflags "-H=windowsgui -s -w" -o dnscrypt-updater-arm64.exe ./cmd/dnscrypt-updater
 ```
 
-Put `dnscrypt-updater.exe` anywhere and run it. A tray icon appears; the menu shows local vs GitHub, **Check now**, **Open GitHub release page**, **Skip this version**, **Snooze 24 hours**, **Quit**.
+Put `dnscrypt-updater.exe` anywhere and run it. A tray icon appears; the menu shows local vs GitHub, the official signed archive name (e.g. `dnscrypt-proxy-win64-2.1.18.zip` + `.minisig`), **Check now**, **Open GitHub release page**, **Skip this version**, **Snooze 24 hours**, **Quit**.
+
+Windows archives on GitHub are `win64` / `win32` / `winarm` zips (plus unsigned `.msi` files, which this app ignores because they have no `.minisig`).
 
 ### Linux / macOS tray (optional)
 
@@ -137,7 +143,23 @@ v1 does not register itself as a login item. Notes:
    - common dirs (`/opt/dnscrypt-proxy/` on Linux as in the wiki updater, Program Files / Scoop / Chocolatey on Windows, Homebrew paths on macOS)
    - Windows `sc qc dnscrypt-proxy` `BINARY_PATH_NAME`, or Linux `systemctl show -p ExecStart`
 3. Run `dnscrypt-proxy -version`, then `--version`. Parse stdout. **PE FileVersion is not used.**
-4. Distro packages may lag GitHub. The tray shows “local binary vs GitHub”; it does not claim your package manager is current.
+4. Distro packages may lag GitHub. The tray shows the **local binary CLI version** vs **GitHub `tag_name`**; it does not claim apt/dnf/winget/scoop is current. Optional later work: a “managed by package manager” hint that only points at `upgrade`.
+
+---
+
+## Official signed assets (notify-only)
+
+v1 does **not** download zips. It identifies the GitHub archive for this OS/arch so you know which file on the release page is official:
+
+| This OS | Asset name pattern |
+| --- | --- |
+| Windows amd64 | `dnscrypt-proxy-win64-<tag>.zip` + `.minisig` |
+| Windows 386 | `dnscrypt-proxy-win32-<tag>.zip` + `.minisig` |
+| Windows arm64 | `dnscrypt-proxy-winarm-<tag>.zip` + `.minisig` |
+| Linux amd64 | `dnscrypt-proxy-linux_x86_64-<tag>.tar.gz` + `.minisig` |
+| macOS arm64 / Intel | `dnscrypt-proxy-macos_arm64-…` / `macos_x86_64-…` |
+
+Verify later with [minisign](https://jedisct1.github.io/minisign/) and the project pubkey above. Do not use unofficial mirrors.
 
 ---
 

@@ -38,6 +38,7 @@ type Release struct {
 	Draft       bool      `json:"draft"`
 	Prerelease  bool      `json:"prerelease"`
 	PublishedAt time.Time `json:"published_at"`
+	Assets      []Asset   `json:"assets"`
 }
 
 // Result is a fetch of /releases/latest, including ETag caching.

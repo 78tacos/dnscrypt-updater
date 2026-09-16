@@ -27,6 +27,12 @@ func TestTooltipAndMenu(t *testing.T) {
 	if statusMenuTitle(nf) != "Local: not found" {
 		t.Fatal(statusMenuTitle(nf))
 	}
+	if !strings.Contains(assetMenuTitle(up), "see GitHub") && !strings.Contains(assetMenuTitle(check.Result{OfficialAsset: "dnscrypt-proxy-win64-2.1.18.zip"}), ".minisig") {
+		t.Fatal(assetMenuTitle(up))
+	}
+	if got := assetMenuTitle(check.Result{OfficialAsset: "dnscrypt-proxy-win64-2.1.18.zip"}); !strings.Contains(got, "win64") {
+		t.Fatal(got)
+	}
 }
 
 func TestIconsEmbedded(t *testing.T) {

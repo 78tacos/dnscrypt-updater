@@ -50,6 +50,13 @@ func remoteMenuTitle(res check.Result) string {
 	return fmt.Sprintf("GitHub %s", res.RemoteVersion)
 }
 
+func assetMenuTitle(res check.Result) string {
+	if res.OfficialAsset == "" {
+		return "Official asset: (see GitHub release)"
+	}
+	return "Asset: " + res.OfficialAsset + " + .minisig"
+}
+
 func emptyDash(s string) string {
 	if strings.TrimSpace(s) == "" {
 		return "—"

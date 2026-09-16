@@ -183,6 +183,65 @@ func TestNotifyDisabled(t *testing.T) {
 	}
 }
 
+func TestOfficialSignedAssetSelected(t *testing.T) {
+	t.Parallel()
+	e := Engine{
+		GitHub: &ghStub{res: githubrel.Result{Release: githubrel.Release{
+			TagName: "2.1.18",
+			HTMLURL: "https://github.com/DNSCrypt/dnscrypt-proxy/releases/tag/2.1.18",
+			Assets: []githubrel.Asset{
+				{Name: "dnscrypt-proxy-win64-2.1.18.zip", BrowserDownloadURL: "https://github.com/DNSCrypt/dnscrypt-proxy/releases/download/2.1.18/dnscrypt-proxy-win64-2.1.18.zip"},
+				{Name: "dnscrypt-proxy-win64-2.1.18.zip.minisig", BrowserDownloadURL: "https://github.com/DNSCrypt/dnscrypt-proxy/releases/download/2.1.18/dnscrypt-proxy-win64-2.1.18.zip.minisig"},
+				{Name: "dnscrypt-proxy-x64-2.1.18.msi", BrowserDownloadURL: "https://github.com/DNSCrypt/dnscrypt-proxy/releases/download/2.1.18/dnscrypt-proxy-x64-2.1.18.msi"},
+			},
+		}}},
+		Detect: detStub{res: detect.Result{Found: true, Version: ver(t, "2.1.14"), Source: detect.SourceBinary}},
+		Now:    time.Now,
+		GOOS:   "windows",
+		GOARCH: "amd64",
+	}
+	res, st, err := e.Run(context.Background(), config.File{Notify: true}, config.State{}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.OfficialAsset != "dnscrypt-proxy-win64-2.1.18.zip" {
+		t.Fatalf("asset %q", res.OfficialAsset)
+	}
+	if res.MinisigName != "dnscrypt-proxy-win64-2.1.18.zip.minisig" {
+		t.Fatalf("minisig %q", res.MinisigName)
+	}
+	if res.MinisignPubKey != githubrel.MinisignPubKey {
+		t.Fatalf("pubkey %q", res.MinisignPubKey)
+	}
+	if st.CachedAssetName != res.OfficialAsset {
+		t.Fatalf("cache %q", st.CachedAssetName)
+	}
+}
+
+func TestNotModifiedRestoresCachedAsset(t *testing.T) {
+	t.Parallel()
+	e := Engine{
+		GitHub: &ghStub{res: githubrel.Result{NotModified: true}},
+		Detect: detStub{res: detect.Result{Found: true, Version: ver(t, "2.1.14"), Source: detect.SourceBinary}},
+		Now:    time.Now,
+		GOOS:   "linux",
+		GOARCH: "amd64",
+	}
+	st := config.State{
+		CachedTag:         "2.1.18",
+		CachedHTMLURL:     "https://github.com/DNSCrypt/dnscrypt-proxy/releases/tag/2.1.18",
+		CachedAssetName:   "dnscrypt-proxy-linux_x86_64-2.1.18.tar.gz",
+		CachedMinisigName: "dnscrypt-proxy-linux_x86_64-2.1.18.tar.gz.minisig",
+	}
+	res, _, err := e.Run(context.Background(), config.File{Notify: true}, st, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.NotModified || res.OfficialAsset != st.CachedAssetName {
+		t.Fatalf("%+v", res)
+	}
+}
+
 func TestGitHubError(t *testing.T) {
 	t.Parallel()
 	e := Engine{

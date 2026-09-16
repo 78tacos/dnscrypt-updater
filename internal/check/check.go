@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime"
 	"time"
 
 	"github.com/78tacos/dnscrypt-updater/internal/config"
@@ -30,6 +31,11 @@ type Result struct {
 	Message          string `json:"message"`
 	LocalParseError  string `json:"local_parse_error,omitempty"`
 	RemoteFetchError string `json:"remote_fetch_error,omitempty"`
+	OfficialAsset    string `json:"official_asset,omitempty"`
+	OfficialAssetURL string `json:"official_asset_url,omitempty"`
+	MinisigName      string `json:"minisig_name,omitempty"`
+	MinisigURL       string `json:"minisig_url,omitempty"`
+	MinisignPubKey   string `json:"minisign_pubkey,omitempty"`
 }
 
 // GitHubClient is satisfied by githubrel.Client.
@@ -47,6 +53,8 @@ type Engine struct {
 	GitHub GitHubClient
 	Detect Detector
 	Now    func() time.Time
+	GOOS   string
+	GOARCH string
 }
 
 func (e Engine) now() time.Time {
@@ -82,6 +90,11 @@ func (e Engine) Run(ctx context.Context, cfg config.File, st config.State, force
 		if st.CachedTag != "" {
 			out.RemoteVersion = version.Normalize(st.CachedTag)
 			out.ReleaseURL = st.CachedHTMLURL
+			out.OfficialAsset = st.CachedAssetName
+			out.OfficialAssetURL = st.CachedAssetURL
+			out.MinisigName = st.CachedMinisigName
+			out.MinisigURL = st.CachedMinisigURL
+			out.MinisignPubKey = githubrel.MinisignPubKey
 		}
 		return out, st, err
 	}
@@ -104,6 +117,7 @@ func (e Engine) Run(ctx context.Context, cfg config.File, st config.State, force
 	if !rel.PublishedAt.IsZero() {
 		out.PublishedAt = rel.PublishedAt.UTC().Format(time.RFC3339)
 	}
+	e.fillOfficialAsset(&out, &st, rel)
 
 	if out.NotFound {
 		out.Message = "dnscrypt-proxy not found. Set binary_path or current_version in config. No version was invented."
@@ -133,6 +147,32 @@ func (e Engine) Run(ctx context.Context, cfg config.File, st config.State, force
 
 	out.ShouldNotify, out.NotifyReason = decideNotify(out, cfg, st, forceNotify)
 	return out, st, nil
+}
+
+func (e Engine) fillOfficialAsset(out *Result, st *config.State, rel githubrel.Release) {
+	out.MinisignPubKey = githubrel.MinisignPubKey
+	goos, goarch := e.GOOS, e.GOARCH
+	if goos == "" {
+		goos = runtime.GOOS
+	}
+	if goarch == "" {
+		goarch = runtime.GOARCH
+	}
+	if signed, ok := githubrel.SelectSignedArchive(goos, goarch, rel.Assets); ok {
+		out.OfficialAsset = signed.Archive.Name
+		out.OfficialAssetURL = signed.Archive.BrowserDownloadURL
+		out.MinisigName = signed.Minisig.Name
+		out.MinisigURL = signed.Minisig.BrowserDownloadURL
+		st.CachedAssetName = out.OfficialAsset
+		st.CachedAssetURL = out.OfficialAssetURL
+		st.CachedMinisigName = out.MinisigName
+		st.CachedMinisigURL = out.MinisigURL
+		return
+	}
+	out.OfficialAsset = st.CachedAssetName
+	out.OfficialAssetURL = st.CachedAssetURL
+	out.MinisigName = st.CachedMinisigName
+	out.MinisigURL = st.CachedMinisigURL
 }
 
 func decideNotify(res Result, cfg config.File, st config.State, force bool) (bool, string) {

@@ -132,6 +132,13 @@ func (rt *Runtime) CheckOnce(ctx context.Context, stdout io.Writer) (int, error)
 		if res.ReleaseURL != "" {
 			fmt.Fprintf(stdout, "release: %s\n", res.ReleaseURL)
 		}
+		if res.OfficialAsset != "" {
+			fmt.Fprintf(stdout, "official asset: %s\n", res.OfficialAsset)
+			if res.MinisigName != "" {
+				fmt.Fprintf(stdout, "minisig: %s\n", res.MinisigName)
+			}
+			fmt.Fprintf(stdout, "minisign pubkey: %s\n", githubrel.MinisignPubKey)
+		}
 		fmt.Fprintf(stdout, "source: %s (official upstream, not a fork)\n", githubrel.LatestURL)
 	}
 	if err != nil {

@@ -35,6 +35,8 @@ func (rt *Runtime) onReady(ctx context.Context) {
 	mLocal.Disable()
 	mRemote := systray.AddMenuItem("GitHub: checking…", "")
 	mRemote.Disable()
+	mAsset := systray.AddMenuItem("Official asset: checking…", "Minisign-signed GitHub archive (not downloaded)")
+	mAsset.Disable()
 	systray.AddSeparator()
 	mCheck := systray.AddMenuItem("Check now", "Poll official DNSCrypt/dnscrypt-proxy releases")
 	mOpen := systray.AddMenuItem("Open GitHub release page", "Open the official upstream release (notify-only)")
@@ -48,6 +50,7 @@ func (rt *Runtime) onReady(ctx context.Context) {
 		systray.SetTooltip(tooltipFor(res))
 		mLocal.SetTitle(statusMenuTitle(res))
 		mRemote.SetTitle(remoteMenuTitle(res))
+		mAsset.SetTitle(assetMenuTitle(res))
 		if res.ReleaseURL == "" {
 			mOpen.Disable()
 		} else {
