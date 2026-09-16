@@ -1,0 +1,10 @@
+/dnscrypt-updater
+/dnscrypt-updater.exe
+/dist/
+*.exe
+*.test
+*.out
+.DS_Store
+.idea/
+.vscode/
+*.tmp

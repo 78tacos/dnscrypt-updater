@@ -1,0 +1,8 @@
+{
+  "check_interval": "12h",
+  "binary_path": "",
+  "current_version": "",
+  "skip_version": "",
+  "snooze_until": "",
+  "notify": true
+}
