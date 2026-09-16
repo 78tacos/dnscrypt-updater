@@ -1,0 +1,21 @@
+name: test
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22.x"
+      - name: Test
+        run: go test ./...
+      - name: Build (Linux, no tray)
+        run: go build -o /tmp/dnscrypt-updater ./cmd/dnscrypt-updater
+      - name: Build (Windows amd64 tray)
+        run: |
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "-H=windowsgui -s -w" -o /tmp/dnscrypt-updater.exe ./cmd/dnscrypt-updater
