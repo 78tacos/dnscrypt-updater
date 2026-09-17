@@ -4,5 +4,8 @@
   "current_version": "",
   "skip_version": "",
   "snooze_until": "",
-  "notify": true
+  "notify": true,
+  "install_dir": "",
+  "set_system_dns": true,
+  "manage_service": true
 }

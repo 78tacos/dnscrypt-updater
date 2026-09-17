@@ -26,50 +26,56 @@ func RunTray(rt *Runtime) error {
 
 func (rt *Runtime) onReady(ctx context.Context) {
 	systray.SetIcon(trayIcon())
-	systray.SetTooltip("dnscrypt-updater")
-	systray.SetTitle("dnscrypt-updater")
+	systray.SetTooltip(AppName)
+	systray.SetTitle(AppName)
 
-	mTitle := systray.AddMenuItem("dnscrypt-updater "+AppVersion+" — notify only", "Does not install or replace dnscrypt-proxy")
+	mTitle := systray.AddMenuItem(AppName+" "+AppVersion, "Downloads official dnscrypt-proxy and can install it for this system")
 	mTitle.Disable()
 	mLocal := systray.AddMenuItem("Local: checking…", "")
 	mLocal.Disable()
 	mRemote := systray.AddMenuItem("GitHub: checking…", "")
 	mRemote.Disable()
-	mAsset := systray.AddMenuItem("Official asset: checking…", "Minisign-signed GitHub archive (not downloaded)")
+	mAsset := systray.AddMenuItem("Official asset: checking…", "Minisign-signed GitHub archive")
 	mAsset.Disable()
 	systray.AddSeparator()
 	mCheck := systray.AddMenuItem("Check now", "Poll official DNSCrypt/dnscrypt-proxy releases")
-	mOpen := systray.AddMenuItem("Open GitHub release page", "Open the official upstream release (notify-only)")
+	mInstall := systray.AddMenuItem("Install dnscrypt-proxy", "Download, minisign-verify, and install for this system")
+	mOpen := systray.AddMenuItem("Open GitHub release page", "Open the official upstream release")
 	mSkip := systray.AddMenuItem("Skip this version", "Do not notify again for the current GitHub tag")
 	mSnooze := systray.AddMenuItem("Snooze 24 hours", "Suppress notifications for a day")
 	systray.AddSeparator()
-	mQuit := systray.AddMenuItem("Quit", "Quit dnscrypt-updater")
+	mQuit := systray.AddMenuItem("Quit", "Quit "+AppName)
 
-	apply := func() {
+	applyStatus := func() {
 		res := rt.snapshot()
 		systray.SetTooltip(tooltipFor(res))
 		mLocal.SetTitle(statusMenuTitle(res))
 		mRemote.SetTitle(remoteMenuTitle(res))
 		mAsset.SetTitle(assetMenuTitle(res))
+		mInstall.SetTitle(installMenuTitle(res))
 		if res.ReleaseURL == "" {
 			mOpen.Disable()
 		} else {
 			mOpen.Enable()
 		}
+		if res.OfficialAssetURL == "" {
+			mInstall.Disable()
+		} else {
+			mInstall.Enable()
+		}
 	}
 
 	go func() {
-		// Initial check at login/start, then on the configured interval.
 		run := func(force bool) {
 			res, err := rt.poll(ctx, force)
 			if err != nil {
-				apply()
+				applyStatus()
 				return
 			}
 			if res.ShouldNotify {
 				rt.maybeNotify(res)
 			}
-			apply()
+			applyStatus()
 		}
 		run(false)
 		for {
@@ -95,7 +101,17 @@ func (rt *Runtime) onReady(ctx context.Context) {
 				if res.ShouldNotify {
 					rt.maybeNotify(res)
 				}
-				apply()
+				applyStatus()
+			case <-mInstall.ClickedCh:
+				mInstall.Disable()
+				mInstall.SetTitle("Installing dnscrypt-proxy…")
+				res, err := rt.Install(ctx)
+				if err != nil {
+					rt.Log.Warn("install", "err", err)
+				} else {
+					rt.Log.Info("install", "msg", res.Message, "path", res.BinaryPath)
+				}
+				applyStatus()
 			case <-mOpen.ClickedCh:
 				if err := rt.openRelease(); err != nil {
 					rt.Log.Warn("open release", "err", err)

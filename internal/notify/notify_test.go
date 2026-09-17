@@ -23,7 +23,7 @@ func TestUpdateAvailableMessage(t *testing.T) {
 	if icon != "" {
 		t.Fatalf("icon %q", icon)
 	}
-	for _, want := range []string{"2.1.14 → 2.1.18", "Notify-only", "github.com/DNSCrypt/dnscrypt-proxy"} {
+	for _, want := range []string{"2.1.14 → 2.1.18", "-install", "github.com/DNSCrypt/dnscrypt-proxy"} {
 		if !strings.Contains(msg, want) {
 			t.Fatalf("message missing %q: %q", want, msg)
 		}

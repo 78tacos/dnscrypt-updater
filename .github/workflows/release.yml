@@ -1,0 +1,50 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing git tag to package (e.g. v2.0.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+      - name: Package archives
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zip
+          VERSION="${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
+          chmod +x scripts/build-release.sh
+          ./scripts/build-release.sh "$VERSION"
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          name: dnscrypt-proxy-updater ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            dist/*.zip
+            dist/*.tar.gz
+            dist/SHA256SUMS
+          body: |
+            Windows: unzip `dnscrypt-proxy-updater-*-windows-amd64.zip` (or `windows-arm64`) and run `dnscrypt-proxy-updater.exe`.
+
+            Tray **Install / Update dnscrypt-proxy** (or `dnscrypt-proxy-updater.exe -install`) downloads the official minisign-signed GitHub archive, verifies it, installs to Program Files, starts the `dnscrypt-proxy` service, and sets system DNS to `127.0.0.1`. UAC is required. Pass `-no-dns` to skip the DNS change.
+
+            Linux and macOS archives are headless `-check-once` / `-install` binaries (tray needs CGO and extra tags; see README).

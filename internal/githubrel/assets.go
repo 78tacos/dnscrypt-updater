@@ -23,7 +23,6 @@ type Asset struct {
 }
 
 // SignedArchive is an official OS/arch archive plus its matching .minisig.
-// v1 only names these (notify / open the release page). It does not download or apply them.
 type SignedArchive struct {
 	Archive Asset
 	Minisig Asset

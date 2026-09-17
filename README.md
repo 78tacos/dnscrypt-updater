@@ -1,48 +1,54 @@
-# dnscrypt-updater
+# dnscrypt-proxy-updater
 
-Lightweight **system-tray companion** that watches for new **official** [dnscrypt-proxy](https://github.com/DNSCrypt/dnscrypt-proxy) releases and **notifies** you.
+Tray companion that watches official [dnscrypt-proxy](https://github.com/DNSCrypt/dnscrypt-proxy) releases, **downloads the minisign-signed archive**, and can **install it for the system**.
 
-v1 is **notify-only**. It never installs dnscrypt-proxy, never replaces a running service binary, never rewrites `dnscrypt-proxy.toml`, and never changes NIC DNS settings. It does **not** bundle or redistribute dnscrypt-proxy.
+This is an original MIT-licensed companion. It is **not** SimpleDnsCrypt. It only installs binaries published by [`DNSCrypt/dnscrypt-proxy`](https://github.com/DNSCrypt/dnscrypt-proxy). Captain’s fork [`78tacos/dnscrypt-proxy`](https://github.com/78tacos/dnscrypt-proxy) is **not** watched.
 
-This is an original MIT-licensed companion. It is **not** SimpleDnsCrypt (a Windows management GUI). Study that project for UX ideas if you like; this repo does not copy it.
-
-**Release source (hardcoded):** [`DNSCrypt/dnscrypt-proxy`](https://github.com/DNSCrypt/dnscrypt-proxy) via
+**Release source (hardcoded):**
 
 `GET https://api.github.com/repos/DNSCrypt/dnscrypt-proxy/releases/latest`
 
-Captain’s fork [`78tacos/dnscrypt-proxy`](https://github.com/78tacos/dnscrypt-proxy) is **not** watched. Prefer GitHub (or package managers that track it). [dnscrypt.org](https://www.dnscrypt.org/) warns against unofficial/torrent “DNSCrypt client” downloads.
+[dnscrypt.org](https://www.dnscrypt.org/) warns against unofficial/torrent “DNSCrypt client” downloads. Prefer GitHub (or package managers that track it).
+
+---
+
+## What install does
+
+Triggered from the tray (**Install / Update dnscrypt-proxy**) or:
+
+```bash
+dnscrypt-proxy-updater -install
+```
+
+On Windows this:
+
+1. Downloads the official `dnscrypt-proxy-win64-*.zip` (or `winarm`) **and** the matching `.minisig`.
+2. Verifies the archive with minisign and pubkey `RWTk1xXqcTODeYttYMCMLo0YJHaFEHn7a3akqHlb/7QvIQXHVPxKbjB5` (also DNSSEC TXT `dnscrypt-proxy.key.dnscrypt.info`).
+3. Installs to `%ProgramFiles%\dnscrypt-proxy` (or your existing install dir). The live `dnscrypt-proxy.toml` is never overwritten; a first install copies `example-dnscrypt-proxy.toml`. The previous exe is kept as `dnscrypt-proxy.exe.old`.
+4. Registers and starts the official `dnscrypt-proxy -service` (needs Administrator; the tray prompts UAC).
+5. Points connected adapters with a default gateway at `127.0.0.1` so the OS uses the local proxy (wiki step 3). Pass `-no-dns` to skip.
+
+It does **not** rewrite your toml, does **not** follow forks, and does **not** auto-install on a background poll. You have to click Install or pass `-install`.
+
+Linux/macOS: files go to `/opt/dnscrypt-proxy` (needs root). Automatic DNS change is Windows-only.
 
 ---
 
 ## OS support
 
-| OS | Tray app | Headless `-check-once` | Notes |
+| OS | Tray app | Headless `-check-once` / `-install` | Notes |
 | --- | --- | --- | --- |
 | **Windows** (primary) | Yes (no CGO) | Yes | Build with `-H=windowsgui` to hide the console. Notifications via Windows toasts. |
 | Linux | Nice-to-have | Yes (default build) | Tray needs CGO plus GTK3 / AppIndicator headers and `-tags systray`. Untagged Linux builds fall back to a one-shot check. |
 | macOS | Nice-to-have | Yes | Tray needs CGO and a proper `.app` bundle for a reliable menu-bar extra. Untagged builds fall back to a one-shot check. |
 
-Version detection tries `dnscrypt-proxy -version` then `--version` (wiki / common CLI). It does **not** trust Windows PE `FileVersion`, which is often empty ([dnscrypt-proxy#2381](https://github.com/DNSCrypt/dnscrypt-proxy/issues/2381)).
-
----
-
-## Safety (v1)
-
-- Poll GitHub Releases and compare to the local CLI version (or your override).
-- If remote > local: desktop notification + tray badge/menu. The action **Open GitHub release page** opens the official tag page (signed zip/tar.gz + `.minisig` live there).
-- No auto-install, no zip apply, no minisign-and-swap, no service restart, no NIC DNS changes.
-- If the binary is missing, the app reports **not found** and does not invent a version. Set `binary_path` or `current_version`.
-- Official archives are minisign-signed. Pubkey `RWTk1xXqcTODeYttYMCMLo0YJHaFEHn7a3akqHlb/7QvIQXHVPxKbjB5` (also DNSSEC TXT `dnscrypt-proxy.key.dnscrypt.info`). v1 **names** the matching asset; it does not download or verify it.
-
-Homepage: [dnscrypt.info](https://dnscrypt.info). Prefer GitHub Releases (or package managers that track them). [dnscrypt.org](https://www.dnscrypt.org/) warns against unofficial/torrent “DNSCrypt client” downloads.
-
-A later apply-update flow (out of scope) would follow the wiki: minisign verify → `dnscrypt-proxy -config old.toml -check` → replace binary only → restart service, keeping a `.old` rollback. v1 never does that.
+Version detection tries `dnscrypt-proxy -version` then `--version`. It does **not** trust Windows PE `FileVersion`, which is often empty ([dnscrypt-proxy#2381](https://github.com/DNSCrypt/dnscrypt-proxy/issues/2381)).
 
 ---
 
 ## How to run
 
-### From source (any OS, one-shot check)
+### From source (any OS)
 
 Requires [Go 1.22+](https://go.dev/dl/).
 
@@ -50,39 +56,36 @@ Requires [Go 1.22+](https://go.dev/dl/).
 git clone https://github.com/78tacos/dnscrypt-updater.git
 cd dnscrypt-updater
 go test ./...
-go build -o dnscrypt-updater ./cmd/dnscrypt-updater
-./dnscrypt-updater -check-once
-./dnscrypt-updater -check-once -json
-./dnscrypt-updater -check-once -current-version 2.1.14
+go build -o dnscrypt-proxy-updater ./cmd/dnscrypt-proxy-updater
+./dnscrypt-proxy-updater -check-once
+./dnscrypt-proxy-updater -install
 ```
 
 `-check-once` exit codes: `0` up to date / skipped / snoozed, `1` error, `2` update available, `3` dnscrypt-proxy not found.
 
-Config is created on first run under the OS user config dir:
+Config is created on first run under the OS user config dir (`dnscrypt-proxy-updater`). Existing `dnscrypt-updater` config directories are still used if present.
 
 | OS | Default config |
 | --- | --- |
-| Windows | `%APPDATA%\dnscrypt-updater\config.json` |
-| Linux | `~/.config/dnscrypt-updater/config.json` |
-| macOS | `~/Library/Application Support/dnscrypt-updater/config.json` |
+| Windows | `%APPDATA%\dnscrypt-proxy-updater\config.json` |
+| Linux | `~/.config/dnscrypt-proxy-updater/config.json` |
+| macOS | `~/Library/Application Support/dnscrypt-proxy-updater/config.json` |
 
-Logs: `dnscrypt-updater.log` in that directory. GitHub `ETag` / `If-None-Match` cache lives in `state.json`.
+Logs: `dnscrypt-proxy-updater.log` in that directory. GitHub `ETag` / `If-None-Match` cache lives in `state.json`.
 
 ### Windows tray binary
 
-Build **on Windows** (or cross-compile from Linux/macOS; no CGO):
-
 ```bash
-GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "-H=windowsgui -s -w" -o dnscrypt-updater.exe ./cmd/dnscrypt-updater
+GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "-H=windowsgui -s -w" -o dnscrypt-proxy-updater.exe ./cmd/dnscrypt-proxy-updater
 ```
 
 ARM64:
 
 ```bash
-GOOS=windows GOARCH=arm64 CGO_ENABLED=0 go build -ldflags "-H=windowsgui -s -w" -o dnscrypt-updater-arm64.exe ./cmd/dnscrypt-updater
+GOOS=windows GOARCH=arm64 CGO_ENABLED=0 go build -ldflags "-H=windowsgui -s -w" -o dnscrypt-proxy-updater-arm64.exe ./cmd/dnscrypt-proxy-updater
 ```
 
-Put `dnscrypt-updater.exe` anywhere and run it. A tray icon appears; the menu shows local vs GitHub, the official signed archive name (e.g. `dnscrypt-proxy-win64-2.1.18.zip` + `.minisig`), **Check now**, **Open GitHub release page**, **Skip this version**, **Snooze 24 hours**, **Quit**.
+Run `dnscrypt-proxy-updater.exe`. The tray menu shows local vs GitHub, the official signed archive, **Check now**, **Install / Update dnscrypt-proxy**, **Open GitHub release page**, **Skip this version**, **Snooze 24 hours**, **Quit**.
 
 Windows archives on GitHub are `win64` / `win32` / `winarm` zips (plus unsigned `.msi` files, which this app ignores because they have no `.minisig`).
 
@@ -91,10 +94,8 @@ Windows archives on GitHub are `win64` / `win32` / `winarm` zips (plus unsigned 
 Linux packages (Debian/Ubuntu): `libgtk-3-dev` and `libayatana-appindicator3-dev` (or `libappindicator3-dev`). Then:
 
 ```bash
-CGO_ENABLED=1 go build -tags systray -o dnscrypt-updater ./cmd/dnscrypt-updater
+CGO_ENABLED=1 go build -tags systray -o dnscrypt-proxy-updater ./cmd/dnscrypt-proxy-updater
 ```
-
-macOS: `CGO_ENABLED=1 go build -tags systray` and wrap the binary in a minimal `.app` bundle so the extra stays in the menu bar.
 
 ---
 
@@ -104,33 +105,33 @@ See [`config.example.json`](config.example.json).
 
 | Field | Default | Meaning |
 | --- | --- | --- |
-| `check_interval` | `12h` | How often to poll GitHub. Go duration (`1h`, `12h`, …). Minimum `15m` so we do not hammer the API. |
-| `binary_path` | empty | Exact `dnscrypt-proxy` / `dnscrypt-proxy.exe` to run `-version` on. |
-| `current_version` | empty | **Manual override** used for comparison when set (still tries to show the discovered path). |
+| `check_interval` | `12h` | How often to poll GitHub. Go duration (`1h`, `12h`, …). Minimum `15m`. |
+| `binary_path` | empty | Exact `dnscrypt-proxy` / `dnscrypt-proxy.exe` to run `-version` on. Set automatically after `-install`. |
+| `current_version` | empty | Manual override used for comparison when set. |
 | `skip_version` | empty | Do not notify for this GitHub tag. |
 | `snooze_until` | empty | RFC3339 timestamp; suppress notifications until then. |
 | `notify` | `true` | Desktop notifications. Tray status still updates. |
+| `install_dir` | empty | Override install location. Windows default: `%ProgramFiles%\dnscrypt-proxy`. |
+| `set_system_dns` | `true` | After install on Windows, set connected adapters to `127.0.0.1`. |
+| `manage_service` | `true` | Install/start `dnscrypt-proxy -service`. |
 
-CLI overrides for one run: `-current-version`, `-binary-path`, `-config`, `-no-notify`, `-notify` (with `-check-once`), `-quiet`.
+CLI: `-install`, `-no-dns`, `-no-service`, `-install-dir`, `-current-version`, `-binary-path`, `-config`, `-no-notify`, `-notify` (with `-check-once`), `-quiet`.
 
 ### Quiet / start with the OS
 
-v1 does not register itself as a login item. Notes:
-
 **Windows**
 
-- Build with `-H=windowsgui` so there is no console (“quiet”).
-- Start with Windows: copy a shortcut to `shell:startup`, or a Task Scheduler task (“At log on”, hidden, action = `dnscrypt-updater.exe`).
-- Do not run it as a Windows service unless you know you need that; this is a per-user tray app.
+- Release builds use `-H=windowsgui` so there is no console.
+- Start with Windows: copy a shortcut to `shell:startup`, or a Task Scheduler task (“At log on”, hidden, action = `dnscrypt-proxy-updater.exe`).
+- Installing the proxy as a service still requires Administrator (UAC).
 
 **Linux**
 
-- XDG Autostart: `~/.config/autostart/dnscrypt-updater.desktop` with `Exec=/path/to/dnscrypt-updater`.
-- systemd user unit `Type=simple` / `WantedBy=default.target` also works for `-check-once` loops, but the tray binary should run inside a graphical session.
+- XDG Autostart: `~/.config/autostart/dnscrypt-proxy-updater.desktop`.
 
 **macOS**
 
-- Login Item, or a LaunchAgent with `RunAtLoad`. Menu-bar extras belong in an `.app`.
+- Login Item, or a LaunchAgent with `RunAtLoad`.
 
 ---
 
@@ -143,13 +144,11 @@ v1 does not register itself as a login item. Notes:
    - common dirs (`/opt/dnscrypt-proxy/` on Linux as in the wiki updater, Program Files / Scoop / Chocolatey on Windows, Homebrew paths on macOS)
    - Windows `sc qc dnscrypt-proxy` `BINARY_PATH_NAME`, or Linux `systemctl show -p ExecStart`
 3. Run `dnscrypt-proxy -version`, then `--version`. Parse stdout. **PE FileVersion is not used.**
-4. Distro packages may lag GitHub. The tray shows the **local binary CLI version** vs **GitHub `tag_name`**; it does not claim apt/dnf/winget/scoop is current. Optional later work: a “managed by package manager” hint that only points at `upgrade`.
+4. Distro packages may lag GitHub. The tray shows the **local binary CLI version** vs **GitHub `tag_name`**. If the current binary is a Scoop/Chocolatey/apt path, `-install` writes a separate copy under Program Files / `/opt` instead of replacing the package.
 
 ---
 
-## Official signed assets (notify-only)
-
-v1 does **not** download zips. It identifies the GitHub archive for this OS/arch so you know which file on the release page is official:
+## Official signed assets
 
 | This OS | Asset name pattern |
 | --- | --- |
@@ -159,7 +158,7 @@ v1 does **not** download zips. It identifies the GitHub archive for this OS/arch
 | Linux amd64 | `dnscrypt-proxy-linux_x86_64-<tag>.tar.gz` + `.minisig` |
 | macOS arm64 / Intel | `dnscrypt-proxy-macos_arm64-…` / `macos_x86_64-…` |
 
-Verify later with [minisign](https://jedisct1.github.io/minisign/) and the project pubkey above. Do not use unofficial mirrors.
+Downloads are only accepted from `github.com` and `*.githubusercontent.com`. MSI installers are ignored (unsigned on GitHub Releases).
 
 ---
 
@@ -169,12 +168,12 @@ Verify later with [minisign](https://jedisct1.github.io/minisign/) and the proje
 go test ./...
 ```
 
-Version compare lives in `internal/version` and is covered by table-driven tests (prefix `v`, pre-release ordering, build metadata). GitHub ETag handling, CLI parsing, skip/snooze, and “do not invent a version” are unit-tested with fakes — no live network required.
+Version compare lives in `internal/version` and is covered by table-driven tests. GitHub ETag handling, CLI parsing, skip/snooze, minisign verify, zip extract, and install file copy are unit-tested with fakes — no live network required.
 
 Live poll (hits GitHub, 60 unauthenticated requests/hour; ETag caching keeps this cheap):
 
 ```bash
-go run ./cmd/dnscrypt-updater -check-once -current-version 2.1.0
+go run ./cmd/dnscrypt-proxy-updater -check-once -current-version 2.1.0
 ```
 
 ---

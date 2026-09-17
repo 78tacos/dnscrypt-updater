@@ -17,15 +17,15 @@ var iconPNG []byte
 func tooltipFor(res check.Result) string {
 	switch {
 	case res.RemoteFetchError != "" && res.RemoteVersion == "":
-		return "dnscrypt-updater: GitHub check failed"
+		return AppName + ": GitHub check failed"
 	case res.NotFound:
-		return "dnscrypt-updater: dnscrypt-proxy not found"
+		return AppName + ": dnscrypt-proxy not found - install from the tray"
 	case res.UpdateAvailable:
-		return fmt.Sprintf("dnscrypt-updater: %s available (local %s)", res.RemoteVersion, res.LocalVersion)
+		return fmt.Sprintf("%s: %s available (local %s)", AppName, res.RemoteVersion, res.LocalVersion)
 	case res.LocalVersion != "" && res.RemoteVersion != "":
-		return fmt.Sprintf("dnscrypt-updater: up to date (%s)", res.LocalVersion)
+		return fmt.Sprintf("%s: up to date (%s)", AppName, res.LocalVersion)
 	default:
-		return "dnscrypt-updater"
+		return AppName
 	}
 }
 
@@ -55,6 +55,17 @@ func assetMenuTitle(res check.Result) string {
 		return "Official asset: (see GitHub release)"
 	}
 	return "Asset: " + res.OfficialAsset + " + .minisig"
+}
+
+func installMenuTitle(res check.Result) string {
+	switch {
+	case res.NotFound:
+		return "Install dnscrypt-proxy"
+	case res.UpdateAvailable:
+		return "Update dnscrypt-proxy now"
+	default:
+		return "Reinstall dnscrypt-proxy"
+	}
 }
 
 func emptyDash(s string) string {

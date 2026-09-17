@@ -10,7 +10,8 @@ import (
 )
 
 const (
-	AppName         = "dnscrypt-updater"
+	AppName         = "dnscrypt-proxy-updater"
+	LegacyAppName   = "dnscrypt-updater"
 	DefaultInterval = 12 * time.Hour
 	MinInterval     = 15 * time.Minute
 	SnoozeDuration  = 24 * time.Hour
@@ -30,6 +31,12 @@ type File struct {
 	SnoozeUntil string `json:"snooze_until"`
 	// Notify enables desktop notifications (tray status still updates).
 	Notify bool `json:"notify"`
+	// InstallDir, if set, is where -install places dnscrypt-proxy.
+	InstallDir string `json:"install_dir"`
+	// SetSystemDNS, on Windows, points connected adapters at 127.0.0.1 after install.
+	SetSystemDNS bool `json:"set_system_dns"`
+	// ManageService installs/starts the official dnscrypt-proxy Windows service.
+	ManageService bool `json:"manage_service"`
 }
 
 // State is machine-written cache (ETag, last check).
@@ -59,6 +66,8 @@ func DefaultFile() File {
 	return File{
 		CheckInterval: DefaultInterval.String(),
 		Notify:        true,
+		SetSystemDNS:  true,
+		ManageService: true,
 	}
 }
 
@@ -81,6 +90,12 @@ func ResolvePaths(explicitConfig string) (Paths, error) {
 		return Paths{}, fmt.Errorf("user config dir: %w", err)
 	}
 	dir := filepath.Join(base, AppName)
+	legacy := filepath.Join(base, LegacyAppName)
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		if st, err := os.Stat(legacy); err == nil && st.IsDir() {
+			dir = legacy
+		}
+	}
 	return Paths{
 		Dir:   dir,
 		File:  filepath.Join(dir, "config.json"),
