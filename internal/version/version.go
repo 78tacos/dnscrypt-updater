@@ -228,8 +228,3 @@ func parsePreNum(s string) (int, bool) {
 	}
 	return n, true
 }
-
-// Greater reports whether remote is a newer release than local.
-func Greater(remote, local Version) bool {
-	return Compare(remote, local) > 0
-}

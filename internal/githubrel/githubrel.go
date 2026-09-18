@@ -33,10 +33,6 @@ const (
 type Release struct {
 	TagName     string    `json:"tag_name"`
 	HTMLURL     string    `json:"html_url"`
-	Name        string    `json:"name"`
-	Body        string    `json:"body"`
-	Draft       bool      `json:"draft"`
-	Prerelease  bool      `json:"prerelease"`
 	PublishedAt time.Time `json:"published_at"`
 	Assets      []Asset   `json:"assets"`
 }
@@ -46,7 +42,6 @@ type Result struct {
 	Release     Release
 	ETag        string
 	NotModified bool
-	StatusCode  int
 }
 
 // Client talks to the GitHub Releases API.
@@ -97,12 +92,12 @@ func (c *Client) Latest(ctx context.Context, etag string) (Result, error) {
 	}
 	defer resp.Body.Close()
 
+	status := resp.StatusCode
 	out := Result{
-		ETag:       resp.Header.Get("ETag"),
-		StatusCode: resp.StatusCode,
+		ETag: resp.Header.Get("ETag"),
 	}
 
-	if resp.StatusCode == http.StatusNotModified {
+	if status == http.StatusNotModified {
 		out.NotModified = true
 		if out.ETag == "" {
 			out.ETag = etag
@@ -117,12 +112,12 @@ func (c *Client) Latest(ctx context.Context, etag string) (Result, error) {
 	if len(body) > maxBody {
 		return out, fmt.Errorf("github release response too large")
 	}
-	if resp.StatusCode != http.StatusOK {
+	if status != http.StatusOK {
 		msg := strings.TrimSpace(string(body))
 		if len(msg) > 200 {
 			msg = msg[:200]
 		}
-		return out, fmt.Errorf("github releases/latest: HTTP %d %s", resp.StatusCode, msg)
+		return out, fmt.Errorf("github releases/latest: HTTP %d %s", status, msg)
 	}
 
 	if err := json.Unmarshal(body, &out.Release); err != nil {

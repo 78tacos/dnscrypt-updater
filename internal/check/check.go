@@ -2,7 +2,6 @@ package check
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"runtime"
 	"time"
@@ -206,6 +205,3 @@ func shouldNotifyNotFound(cfg config.File, st config.State, now time.Time, force
 	}
 	return true, "not_found"
 }
-
-// ErrNoGitHub is reserved for wiring mistakes.
-var ErrNoGitHub = errors.New("github client not configured")
