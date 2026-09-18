@@ -1,0 +1,48 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing git tag to package (e.g. v1.1.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+      - name: Package archives
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zip
+          VERSION="${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
+          chmod +x scripts/build-release.sh
+          ./scripts/build-release.sh "$VERSION"
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          name: dnscrypt-updater ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            dist/*.zip
+            dist/*.tar.gz
+            dist/SHA256SUMS
+          body: |
+            Windows: unzip `dnscrypt-updater-*-windows-amd64.zip` (or `windows-arm64`) and run `dnscrypt-updater.exe`. It is a tray app (no console window). It never installs dnscrypt-proxy; it only notifies when an official upstream release is out.
+
+            Linux and macOS archives are headless `-check-once` binaries (tray needs CGO and extra tags; see README).

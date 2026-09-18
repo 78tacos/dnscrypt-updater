@@ -19,10 +19,10 @@ import (
 	"github.com/78tacos/dnscrypt-updater/internal/openurl"
 )
 
-const (
-	AppVersion = "0.1.0"
-	AppName    = "dnscrypt-updater"
-)
+const AppName = "dnscrypt-updater"
+
+// AppVersion is this companion's semver. Release builds override it with -ldflags.
+var AppVersion = "1.1.0"
 
 // ErrTrayUnavailable is returned by builds that were compiled without a system tray.
 var ErrTrayUnavailable = errors.New("system tray is not available in this build")

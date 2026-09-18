@@ -42,6 +42,14 @@ A later apply-update flow (out of scope) would follow the wiki: minisign verify 
 
 ## How to run
 
+### Prebuilt binaries
+
+GitHub Releases publish `dnscrypt-updater.exe` zips for Windows amd64/arm64 (tray, no console) and headless archives for Linux/macOS.
+
+1. Open the latest [GitHub Release](https://github.com/78tacos/dnscrypt-updater/releases/latest).
+2. Windows: unzip `dnscrypt-updater-*-windows-amd64.zip` (or `windows-arm64` on ARM PCs) and run `dnscrypt-updater.exe`.
+3. Linux/macOS: extract the `.tar.gz` and run `./dnscrypt-updater -check-once` (tray builds still need CGO; see below).
+
 ### From source (any OS, one-shot check)
 
 Requires [Go 1.22+](https://go.dev/dl/).
