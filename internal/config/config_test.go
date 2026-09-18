@@ -74,6 +74,25 @@ func TestLoadSaveRoundTrip(t *testing.T) {
 	if missing.CheckInterval != DefaultInterval.String() {
 		t.Fatalf("default %+v", missing)
 	}
+	if !missing.SetSystemDNS || !missing.ManageService {
+		t.Fatalf("install defaults %+v", missing)
+	}
+}
+
+func TestLoadFileKeepsInstallDefaultsWhenOmitted(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	if err := os.WriteFile(path, []byte(`{"check_interval":"12h","notify":true}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := LoadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.SetSystemDNS || !got.ManageService {
+		t.Fatalf("omitted fields should keep defaults %+v", got)
+	}
 }
 
 func TestResolvePathsExplicit(t *testing.T) {

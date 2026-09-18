@@ -51,7 +51,7 @@ func TestLatestParsesTagAndURL(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	c := &Client{HTTP: srv.Client(), URL: srv.URL, UserAgent: "dnscrypt-updater-test"}
+	c := &Client{HTTP: srv.Client(), URL: srv.URL, UserAgent: "dnscrypt-proxy-updater-test"}
 	res, err := c.Latest(context.Background(), "")
 	if err != nil {
 		t.Fatal(err)

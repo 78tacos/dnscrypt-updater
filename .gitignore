@@ -1,5 +1,7 @@
 /dnscrypt-updater
 /dnscrypt-updater.exe
+/dnscrypt-proxy-updater
+/dnscrypt-proxy-updater.exe
 /dist/
 *.exe
 *.test

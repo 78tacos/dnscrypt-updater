@@ -33,6 +33,12 @@ func TestTooltipAndMenu(t *testing.T) {
 	if got := assetMenuTitle(check.Result{OfficialAsset: "dnscrypt-proxy-win64-2.1.18.zip"}); !strings.Contains(got, "win64") {
 		t.Fatal(got)
 	}
+	if installMenuTitle(nf) != "Install dnscrypt-proxy" {
+		t.Fatal(installMenuTitle(nf))
+	}
+	if installMenuTitle(up) != "Update dnscrypt-proxy now" {
+		t.Fatal(installMenuTitle(up))
+	}
 }
 
 func TestIconsEmbedded(t *testing.T) {

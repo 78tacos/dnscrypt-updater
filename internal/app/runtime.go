@@ -8,9 +8,11 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/78tacos/dnscrypt-updater/internal/apply"
 	"github.com/78tacos/dnscrypt-updater/internal/check"
 	"github.com/78tacos/dnscrypt-updater/internal/config"
 	"github.com/78tacos/dnscrypt-updater/internal/detect"
@@ -19,10 +21,10 @@ import (
 	"github.com/78tacos/dnscrypt-updater/internal/openurl"
 )
 
-const AppName = "dnscrypt-updater"
+const AppName = "dnscrypt-proxy-updater"
 
 // AppVersion is this companion's semver. Release builds override it with -ldflags.
-var AppVersion = "1.1.0"
+var AppVersion = "2.0.0"
 
 // ErrTrayUnavailable is returned by builds that were compiled without a system tray.
 var ErrTrayUnavailable = errors.New("system tray is not available in this build")
@@ -37,6 +39,10 @@ type Options struct {
 	BinaryPath     string
 	ForceNotify    bool
 	NoNotify       bool
+	Install        bool
+	NoDNS          bool
+	NoService      bool
+	InstallDir     string
 }
 
 // Runtime is the long-lived updater process.
@@ -51,6 +57,8 @@ type Runtime struct {
 	state  config.State
 	last   check.Result
 	cancel context.CancelFunc
+
+	Applier *apply.Applier
 }
 
 func NewRuntime(opts Options, log *slog.Logger) (*Runtime, error) {
@@ -91,11 +99,12 @@ func NewRuntime(opts Options, log *slog.Logger) (*Runtime, error) {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Runtime{Opts: opts, Paths: paths, Engine: eng, Log: log, cfg: cfg, state: st}, nil
+	ap := &apply.Applier{Log: log, UserAgent: UserAgent(), Getenv: os.Getenv}
+	return &Runtime{Opts: opts, Paths: paths, Engine: eng, Log: log, cfg: cfg, state: st, Applier: ap}, nil
 }
 
 func UserAgent() string {
-	return "dnscrypt-updater/" + AppVersion + " (+https://github.com/78tacos/dnscrypt-updater)"
+	return AppName + "/" + AppVersion + " (+https://github.com/78tacos/dnscrypt-updater)"
 }
 
 func SetupLogger(paths config.Paths, quiet bool) (*slog.Logger, func(), error) {
@@ -256,4 +265,119 @@ func (rt *Runtime) interval() time.Duration {
 		return config.DefaultInterval
 	}
 	return d
+}
+
+func (rt *Runtime) applier() *apply.Applier {
+	if rt.Applier != nil {
+		return rt.Applier
+	}
+	rt.Applier = &apply.Applier{Log: rt.Log, UserAgent: UserAgent(), Getenv: os.Getenv}
+	return rt.Applier
+}
+
+func (rt *Runtime) signedArchive() (githubrel.SignedArchive, string, error) {
+	res := rt.snapshot()
+	if res.OfficialAssetURL == "" || res.MinisigURL == "" {
+		return githubrel.SignedArchive{}, "", errors.New("no official signed archive identified; check GitHub first")
+	}
+	return githubrel.SignedArchive{
+		Archive: githubrel.Asset{Name: res.OfficialAsset, BrowserDownloadURL: res.OfficialAssetURL},
+		Minisig: githubrel.Asset{Name: res.MinisigName, BrowserDownloadURL: res.MinisigURL},
+	}, res.RemoteVersion, nil
+}
+
+// Install downloads the official signed dnscrypt-proxy archive, verifies it,
+// installs it, and on Windows can register the service and set system DNS.
+func (rt *Runtime) Install(ctx context.Context) (apply.Result, error) {
+	if _, err := rt.poll(ctx, false); err != nil {
+		return apply.Result{}, err
+	}
+	archive, tag, err := rt.signedArchive()
+	if err != nil {
+		return apply.Result{}, err
+	}
+
+	rt.mu.Lock()
+	cfg := rt.cfg
+	existing := rt.last.BinaryPath
+	rt.mu.Unlock()
+
+	opts := apply.Options{
+		InstallDir:     firstNonEmpty(rt.Opts.InstallDir, cfg.InstallDir),
+		ExistingBinary: firstNonEmpty(rt.Opts.BinaryPath, existing),
+		SetSystemDNS:   cfg.SetSystemDNS && !rt.Opts.NoDNS,
+		ManageService:  cfg.ManageService && !rt.Opts.NoService,
+	}
+
+	ap := rt.applier()
+	if ap.NeedsWindowsElevation() {
+		args := []string{"-install", "-quiet", "-config", rt.Paths.File}
+		if rt.Opts.NoDNS || !cfg.SetSystemDNS {
+			args = append(args, "-no-dns")
+		}
+		if rt.Opts.NoService || !cfg.ManageService {
+			args = append(args, "-no-service")
+		}
+		if opts.InstallDir != "" {
+			args = append(args, "-install-dir", opts.InstallDir)
+		}
+		rt.Log.Info("requesting administrator permission to install dnscrypt-proxy")
+		code, err := ap.RelaunchElevated(args)
+		if err != nil {
+			return apply.Result{}, err
+		}
+		if code != 0 {
+			return apply.Result{}, fmt.Errorf("elevated install exited %d", code)
+		}
+		cfg2, err := config.LoadFile(rt.Paths.File)
+		if err == nil {
+			rt.mu.Lock()
+			rt.cfg = cfg2
+			rt.mu.Unlock()
+		}
+		res, _ := rt.poll(ctx, false)
+		out := apply.Result{
+			Version:    tag,
+			BinaryPath: res.BinaryPath,
+			Verified:   true,
+			Message:    "Installed dnscrypt-proxy with administrator permission.",
+		}
+		if res.BinaryPath != "" && !res.NotFound {
+			out.BinaryPath = res.BinaryPath
+			out.Version = res.LocalVersion
+			out.Message = fmt.Sprintf("Installed dnscrypt-proxy %s at %s.", res.LocalVersion, res.BinaryPath)
+		}
+		return out, nil
+	}
+
+	res, err := ap.Apply(ctx, archive, tag, opts)
+	if err != nil {
+		_ = notify.InstallFailed(err)
+		return res, err
+	}
+	if res.BinaryPath != "" {
+		rt.mu.Lock()
+		rt.cfg.BinaryPath = res.BinaryPath
+		saveErr := config.SaveFile(rt.Paths.File, rt.cfg)
+		rt.mu.Unlock()
+		if saveErr != nil {
+			rt.Log.Warn("save binary_path after install", "err", saveErr)
+		}
+	}
+	if nerr := notify.Installed(res.Message); nerr != nil {
+		rt.Log.Warn("install notification", "err", nerr)
+	}
+	if _, perr := rt.poll(ctx, false); perr != nil {
+		rt.Log.Warn("post-install check", "err", perr)
+	}
+	return res, nil
+}
+
+func firstNonEmpty(vals ...string) string {
+	for _, v := range vals {
+		if strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return ""
 }

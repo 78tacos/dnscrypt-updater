@@ -3,6 +3,7 @@ module github.com/78tacos/dnscrypt-updater
 go 1.22
 
 require (
+	aead.dev/minisign v0.3.0
 	github.com/gen2brain/beeep v0.11.1
 	github.com/getlantern/systray v1.2.2
 )
@@ -25,5 +26,6 @@ require (
 	github.com/sergeymakinen/go-bmp v1.0.0 // indirect
 	github.com/sergeymakinen/go-ico v1.0.0-beta.0 // indirect
 	github.com/tadvi/systray v0.0.0-20190226123456-11a2b8fa57af // indirect
+	golang.org/x/crypto v0.13.0 // indirect
 	golang.org/x/sys v0.30.0 // indirect
 )

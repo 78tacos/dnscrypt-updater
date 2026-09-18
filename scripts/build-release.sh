@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build release archives for dnscrypt-updater. Usage: scripts/build-release.sh [version]
+# Build release archives for dnscrypt-proxy-updater. Usage: scripts/build-release.sh [version]
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -32,9 +32,9 @@ build_windows() {
   local arch="$1"
   local tmp
   tmp="$(mktemp -d)"
-  CGO_ENABLED=0 GOOS=windows GOARCH="$arch" go build -trimpath -ldflags "$WINDOWS_LDFLAGS" -o "${tmp}/dnscrypt-updater.exe" ./cmd/dnscrypt-updater
+  CGO_ENABLED=0 GOOS=windows GOARCH="$arch" go build -trimpath -ldflags "$WINDOWS_LDFLAGS" -o "${tmp}/dnscrypt-proxy-updater.exe" ./cmd/dnscrypt-proxy-updater
   copy_docs "$tmp"
-  (cd "$tmp" && zip -q "${OUT}/dnscrypt-updater-${VERSION}-windows-${arch}.zip" dnscrypt-updater.exe LICENSE README.md config.example.json)
+  (cd "$tmp" && zip -q "${OUT}/dnscrypt-proxy-updater-${VERSION}-windows-${arch}.zip" dnscrypt-proxy-updater.exe LICENSE README.md config.example.json)
   rm -rf "$tmp"
 }
 
@@ -43,9 +43,9 @@ build_unix() {
   local arch="$2"
   local tmp
   tmp="$(mktemp -d)"
-  CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath -ldflags "$LDFLAGS" -o "${tmp}/dnscrypt-updater" ./cmd/dnscrypt-updater
+  CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath -ldflags "$LDFLAGS" -o "${tmp}/dnscrypt-proxy-updater" ./cmd/dnscrypt-proxy-updater
   copy_docs "$tmp"
-  tar -C "$tmp" -czf "${OUT}/dnscrypt-updater-${VERSION}-${os}-${arch}.tar.gz" dnscrypt-updater LICENSE README.md config.example.json
+  tar -C "$tmp" -czf "${OUT}/dnscrypt-proxy-updater-${VERSION}-${os}-${arch}.tar.gz" dnscrypt-proxy-updater LICENSE README.md config.example.json
   rm -rf "$tmp"
 }
 

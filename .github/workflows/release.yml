@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing git tag to package (e.g. v1.1.0)"
+        description: "Existing git tag to package (e.g. v2.0.0)"
         required: true
         type: string
 
@@ -35,7 +35,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-          name: dnscrypt-updater ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          name: dnscrypt-proxy-updater ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: |
@@ -43,6 +43,8 @@ jobs:
             dist/*.tar.gz
             dist/SHA256SUMS
           body: |
-            Windows: unzip `dnscrypt-updater-*-windows-amd64.zip` (or `windows-arm64`) and run `dnscrypt-updater.exe`. It is a tray app (no console window). It never installs dnscrypt-proxy; it only notifies when an official upstream release is out.
+            Windows: unzip `dnscrypt-proxy-updater-*-windows-amd64.zip` (or `windows-arm64`) and run `dnscrypt-proxy-updater.exe`.
 
-            Linux and macOS archives are headless `-check-once` binaries (tray needs CGO and extra tags; see README).
+            Tray **Install / Update dnscrypt-proxy** (or `dnscrypt-proxy-updater.exe -install`) downloads the official minisign-signed GitHub archive, verifies it, installs to Program Files, starts the `dnscrypt-proxy` service, and sets system DNS to `127.0.0.1`. UAC is required. Pass `-no-dns` to skip the DNS change.
+
+            Linux and macOS archives are headless `-check-once` / `-install` binaries (tray needs CGO and extra tags; see README).

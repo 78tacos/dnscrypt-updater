@@ -120,7 +120,7 @@ func (e Engine) Run(ctx context.Context, cfg config.File, st config.State, force
 	e.fillOfficialAsset(&out, &st, rel)
 
 	if out.NotFound {
-		out.Message = "dnscrypt-proxy not found. Set binary_path or current_version in config. No version was invented."
+		out.Message = "dnscrypt-proxy not found. Install with -install (or the tray), or set binary_path / current_version. No version was invented."
 		out.ShouldNotify, out.NotifyReason = shouldNotifyNotFound(cfg, st, now, forceNotify)
 		return out, st, nil
 	}

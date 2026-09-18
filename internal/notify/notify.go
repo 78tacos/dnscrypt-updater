@@ -9,19 +9,31 @@ func beeepNotify(title, message, iconPath string) error {
 	return beeep.Notify(title, message, iconPath)
 }
 
-// UpdateAvailable is the v1 notify-only message. The user must open the
-// GitHub release page themselves (tray action / URL in the body). This helper
-// never installs or replaces dnscrypt-proxy.
 func UpdateAvailable(local, remote, releaseURL string) error {
 	title := "dnscrypt-proxy update available"
-	msg := local + " → " + remote + "\nOfficial release: " + releaseURL + "\nNotify-only: this app will not install the update."
+	msg := local + " → " + remote + "\nOfficial release: " + releaseURL + "\nUse Install / Update in the tray, or run with -install."
 	return Send(title, msg, "")
 }
 
 func NotFound() error {
 	return Send(
 		"dnscrypt-proxy not found",
-		"dnscrypt-updater could not run dnscrypt-proxy -version. Set binary_path or current_version in config.json. No version was assumed.",
+		"dnscrypt-proxy-updater could not run dnscrypt-proxy -version. Use Install in the tray, or: dnscrypt-proxy-updater -install",
 		"",
 	)
+}
+
+func Installed(message string) error {
+	if message == "" {
+		message = "dnscrypt-proxy was installed."
+	}
+	return Send("dnscrypt-proxy installed", message, "")
+}
+
+func InstallFailed(err error) error {
+	msg := "install failed"
+	if err != nil {
+		msg = err.Error()
+	}
+	return Send("dnscrypt-proxy install failed", msg, "")
 }

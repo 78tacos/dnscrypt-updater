@@ -74,7 +74,7 @@ func (c *Client) userAgent() string {
 	if c != nil && c.UserAgent != "" {
 		return c.UserAgent
 	}
-	return "dnscrypt-updater/0.1.0 (+https://github.com/78tacos/dnscrypt-updater)"
+	return "dnscrypt-proxy-updater/2.0.0 (+https://github.com/78tacos/dnscrypt-updater)"
 }
 
 // Latest GETs /releases/latest. If etag is non-empty it is sent as If-None-Match.
