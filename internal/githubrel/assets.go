@@ -5,15 +5,9 @@ import (
 )
 
 const (
-	// Homepage is the project site (distinct from unofficial dnscrypt.org client downloads).
-	Homepage = "https://dnscrypt.info"
-
 	// MinisignPubKey verifies official GitHub release archives.
 	// Also published as DNSSEC TXT dnscrypt-proxy.key.dnscrypt.info.
 	MinisignPubKey = "RWTk1xXqcTODeYttYMCMLo0YJHaFEHn7a3akqHlb/7QvIQXHVPxKbjB5"
-
-	// MinisignDNS is the DNSSEC-signed TXT that publishes MinisignPubKey.
-	MinisignDNS = "dnscrypt-proxy.key.dnscrypt.info"
 )
 
 // Asset is one GitHub release file.

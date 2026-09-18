@@ -115,7 +115,7 @@ func TestCompareTable(t *testing.T) {
 	}
 }
 
-func TestGreaterRemoteVsLocal(t *testing.T) {
+func TestCompareRemoteVsLocal(t *testing.T) {
 	t.Parallel()
 	remote, err := Parse("2.1.18")
 	if err != nil {
@@ -125,14 +125,14 @@ func TestGreaterRemoteVsLocal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !Greater(remote, local) {
+	if Compare(remote, local) <= 0 {
 		t.Fatal("expected remote > local")
 	}
-	if Greater(local, remote) {
+	if Compare(local, remote) >= 0 {
 		t.Fatal("did not expect local > remote")
 	}
 	same, _ := Parse("v2.1.18")
-	if Greater(remote, same) {
+	if Compare(remote, same) != 0 {
 		t.Fatal("equal tags must not count as an update")
 	}
 }
