@@ -48,6 +48,15 @@ Version detection tries `dnscrypt-proxy -version` then `--version`. It does **no
 
 ## How to run
 
+### Prebuilt binaries
+
+GitHub Releases publish `dnscrypt-proxy-updater.exe` zips for Windows amd64/arm64 (tray, no console) and headless archives for Linux/macOS.
+
+1. Open the latest [GitHub Release](https://github.com/78tacos/dnscrypt-updater/releases/latest).
+2. Windows: unzip `dnscrypt-proxy-updater-*-windows-amd64.zip` (or `windows-arm64` on ARM PCs) and run `dnscrypt-proxy-updater.exe`.
+3. Use tray **Install / Update dnscrypt-proxy** (or `-install`) to download the official signed proxy and install it for the system.
+4. Linux/macOS: extract the `.tar.gz` and run `./dnscrypt-proxy-updater -check-once` (tray builds still need CGO; see below).
+
 ### From source (any OS)
 
 Requires [Go 1.22+](https://go.dev/dl/).

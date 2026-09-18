@@ -23,7 +23,7 @@ import (
 
 const AppName = "dnscrypt-proxy-updater"
 
-// AppVersion is overridden at release time with -ldflags "-X ...AppVersion=2.0.0".
+// AppVersion is this companion's semver. Release builds override it with -ldflags.
 var AppVersion = "2.0.0"
 
 // ErrTrayUnavailable is returned by builds that were compiled without a system tray.
