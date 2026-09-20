@@ -49,4 +49,11 @@ func TestIconsEmbedded(t *testing.T) {
 	if string(iconPNG[1:4]) != "PNG" {
 		t.Fatal("png signature")
 	}
+	// ICO header: reserved=0, type=1 (icon), count>=1
+	if len(iconICO) < 6 || iconICO[0] != 0 || iconICO[1] != 0 || iconICO[2] != 1 || iconICO[3] != 0 {
+		t.Fatalf("ico header %v", iconICO[:min(6, len(iconICO))])
+	}
+	if iconICO[4] < 1 {
+		t.Fatal("ico has no images")
+	}
 }
