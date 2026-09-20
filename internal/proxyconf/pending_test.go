@@ -28,6 +28,9 @@ func TestIsPrivilegeError(t *testing.T) {
 	if !IsPrivilegeError(fmtErr(`write dnscrypt-proxy.toml: open C:\Program Files\dnscrypt-proxy\dnscrypt-proxy.toml: The process cannot access the file because it is being used by another process.`)) {
 		t.Fatal("sharing violation")
 	}
+	if !IsPrivilegeError(fmtErr("administrator apply failed: service start failed: exit status 1")) {
+		t.Fatal("admin apply failed")
+	}
 	if IsPrivilegeError(fmtErr("dnscrypt-proxy -check: bad key")) {
 		t.Fatal("check errors are not privilege errors")
 	}
@@ -122,6 +125,37 @@ func TestTryCommitPrivilegeQueuesPending(t *testing.T) {
 	got, _ := os.ReadFile(filepath.Join(install, "dnscrypt-proxy.toml"))
 	if string(got) != "cache = false\n" {
 		t.Fatalf("live file should be unchanged: %q", got)
+	}
+}
+
+func TestTryCommitElevateExitStatusQueuesPending(t *testing.T) {
+	t.Parallel()
+	install := t.TempDir()
+	staging := t.TempDir()
+	pending := filepath.Join(t.TempDir(), "pending")
+	if err := os.WriteFile(filepath.Join(install, "dnscrypt-proxy.toml"), []byte("cache = false\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(staging, "dnscrypt-proxy.toml"), []byte("cache = true\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Bare exec.ExitError text is not IsPrivilegeError; admin apply still
+	// must fall back to AppData instead of "Save failed: exit status 1".
+	res, err := TryCommit(context.Background(), ApplyEnv{
+		InstallDir: install,
+		WriteErr:   os.ErrPermission,
+	}, staging, pending, false, func(context.Context, string) error {
+		return fmtErr("exit status 1")
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Pending || res.Applied {
+		t.Fatalf("%+v", res)
+	}
+	got := ReadPending(pending)
+	if !got.Present || !strings.Contains(got.Reason, "exit status 1") {
+		t.Fatalf("%+v", got)
 	}
 }
 

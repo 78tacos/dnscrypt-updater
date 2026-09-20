@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -116,19 +117,30 @@ func (rt *Runtime) checkProxyConfig(ctx context.Context, bin, configPath string)
 
 func (rt *Runtime) elevateApply(staging string) error {
 	dir, _ := rt.proxyPaths()
+	proxyconf.ClearApplyError(staging)
+	// -quiet keeps the UAC child from flashing a console; failure text is written
+	// to staging/.apply-error.txt for the parent to read.
 	args := []string{"-apply-config", "-quiet", "-config", rt.Paths.File, "-staging", staging}
 	if dir != "" {
 		args = append(args, "-install-dir", dir)
 	}
 	rt.Log.Info("requesting administrator permission to save dnscrypt-proxy settings")
 	code, err := rt.applier().RelaunchElevated(args)
-	if err != nil {
+	detail := proxyconf.ReadApplyError(staging)
+	if code == 0 && err == nil {
+		proxyconf.ClearApplyError(staging)
+		return nil
+	}
+	if err != nil && errors.Is(err, apply.ErrElevationCancelled) {
 		return err
 	}
-	if code != 0 {
-		return fmt.Errorf("elevated apply-config exited %d", code)
+	if detail != "" {
+		return fmt.Errorf("administrator apply failed: %s", detail)
 	}
-	return nil
+	if err != nil {
+		return fmt.Errorf("administrator apply failed: %w", err)
+	}
+	return fmt.Errorf("administrator apply failed (exit %d)", code)
 }
 
 // ApplyStaged commits a staging directory written by the settings UI (elevated path).
@@ -150,8 +162,10 @@ func (rt *Runtime) ApplyStaged(ctx context.Context, staging string) (proxyconf.A
 		StartService:  ap.StartService,
 	}, staging)
 	if err != nil {
+		proxyconf.WriteApplyError(staging, err)
 		return res, err
 	}
+	proxyconf.ClearApplyError(staging)
 	if pending := strings.TrimSpace(rt.Paths.Pending); pending != "" {
 		_ = proxyconf.ClearPending(pending)
 	}

@@ -3,6 +3,7 @@
 package apply
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"strings"
@@ -30,11 +31,17 @@ func relaunchElevatedAndWait(args []string) (int, error) {
 		return 0, nil
 	}
 	if ee, ok := err.(*exec.ExitError); ok {
+		code := ee.ExitCode()
 		msg := strings.ToLower(string(ee.Stderr))
-		if strings.Contains(msg, "cancel") || ee.ExitCode() == 1223 {
-			return ee.ExitCode(), ErrElevationCancelled
+		if strings.Contains(msg, "cancel") || code == 1223 {
+			return code, ErrElevationCancelled
 		}
-		return ee.ExitCode(), err
+		// PowerShell returns ExitError for any non-zero child exit; prefer the
+		// numeric code and a stable sentinel so callers can read .apply-error.txt.
+		if code != 0 {
+			return code, fmt.Errorf("%w: exit status %d", ErrElevationFailed, code)
+		}
+		return code, err
 	}
 	if strings.Contains(strings.ToLower(err.Error()), "cancel") {
 		return 1, ErrElevationCancelled

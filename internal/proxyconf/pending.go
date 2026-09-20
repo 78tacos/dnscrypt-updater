@@ -50,6 +50,8 @@ func IsPrivilegeError(err error) bool {
 		"access is denied",
 		"operation not permitted",
 		"administrator permission was declined",
+		"administrator apply failed",
+		"elevated process failed",
 		"automatic elevation is only supported",
 		"the requested operation requires elevation",
 		"being used by another process",

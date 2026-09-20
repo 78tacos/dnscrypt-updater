@@ -237,8 +237,11 @@ func TryCommit(ctx context.Context, env ApplyEnv, staging, pendingDir string, wr
 	}
 	if elevate != nil {
 		if eerr := elevate(ctx, staging); eerr != nil {
-			if IsPrivilegeError(eerr) {
-				return queuePending(staging, pendingDir, env.InstallDir, eerr)
+			// Settings already passed -check. If admin apply did not land them
+			// (UAC cancel, opaque "exit status 1", service failure, …), park them
+			// in AppData instead of returning a useless bare exec error.
+			if q, qerr := queuePending(staging, pendingDir, env.InstallDir, eerr); qerr == nil {
+				return q, nil
 			}
 			return ApplyResult{}, eerr
 		}
