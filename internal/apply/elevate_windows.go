@@ -7,13 +7,22 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"syscall"
 )
 
+var (
+	elevatedOnce sync.Once
+	elevatedVal  bool
+)
+
 func isElevated() bool {
-	cmd := exec.Command("net", "session")
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-	return cmd.Run() == nil
+	elevatedOnce.Do(func() {
+		cmd := exec.Command("net", "session")
+		cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: createNoWindow}
+		elevatedVal = cmd.Run() == nil
+	})
+	return elevatedVal
 }
 
 func relaunchElevatedAndWait(args []string) (int, error) {
@@ -24,8 +33,8 @@ func relaunchElevatedAndWait(args []string) (int, error) {
 	script := "$p = Start-Process -FilePath " + powershellSingleQuote(exe) +
 		" -ArgumentList " + powershellArgumentList(args) +
 		" -Verb RunAs -Wait -PassThru -WindowStyle Hidden; if ($null -eq $p) { exit 1 }; exit $p.ExitCode"
-	cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", script)
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", script)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: createNoWindow}
 	err = cmd.Run()
 	if err == nil {
 		return 0, nil

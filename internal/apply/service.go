@@ -54,6 +54,7 @@ func runCmd(ctx context.Context, dir, name string, args ...string) ([]byte, erro
 	var buf bytes.Buffer
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
+	hideConsole(cmd)
 	err := cmd.Run()
 	return buf.Bytes(), err
 }
@@ -87,6 +88,7 @@ func runConfigCheck(ctx context.Context, bin, configPath string) error {
 	}
 	cmd := exec.CommandContext(ctx, bin, "-config", configPath, "-check")
 	cmd.Dir = filepath.Dir(configPath)
+	hideConsole(cmd)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		msg := strings.TrimSpace(string(out))

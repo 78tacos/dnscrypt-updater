@@ -224,9 +224,8 @@ func Commit(ctx context.Context, env ApplyEnv, staging string) (ApplyResult, err
 // after Commit fails with a detectable privilege / sharing error.
 func TryCommit(ctx context.Context, env ApplyEnv, staging, pendingDir string, writable bool, elevate func(context.Context, string) error) (ApplyResult, error) {
 	_ = writable // retained for callers / UI; no longer gates elevation.
-	if err := checkStaging(ctx, env, staging); err != nil {
-		return ApplyResult{}, err
-	}
+	// Commit runs -check once before writing; do not pre-check here (avoids an
+	// extra dnscrypt-proxy console flash on Windows).
 	res, err := Commit(ctx, env, staging)
 	if err == nil {
 		_ = ClearPending(pendingDir)
@@ -269,13 +268,6 @@ func retryAfterStop(ctx context.Context, env ApplyEnv, first error, fn func() er
 		return first
 	}
 	return nil
-}
-
-func checkStaging(ctx context.Context, env ApplyEnv, staging string) error {
-	if env.Check == nil || strings.TrimSpace(env.BinaryPath) == "" {
-		return nil
-	}
-	return env.Check(ctx, env.BinaryPath, filepath.Join(staging, tomlName))
 }
 
 func queuePending(staging, pendingDir, installDir string, cause error) (ApplyResult, error) {
