@@ -25,13 +25,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
       - uses: actions/setup-go@v5
         with:
           go-version: "1.22.x"
       - name: Cross-compile Windows tray
         run: |
-          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "-H=windowsgui -s -w" -o dnscrypt-proxy-updater-windows-amd64.exe ./cmd/dnscrypt-proxy-updater
-          GOOS=windows GOARCH=arm64 CGO_ENABLED=0 go build -ldflags "-H=windowsgui -s -w" -o dnscrypt-proxy-updater-windows-arm64.exe ./cmd/dnscrypt-proxy-updater
+          VER="$(git describe --tags --always)"
+          LDFLAGS="-s -w -H=windowsgui -X github.com/78tacos/dnscrypt-updater/internal/app.AppVersion=${VER}"
+          mkdir -p dist
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "$LDFLAGS" -o dist/dnscrypt-proxy-updater.exe ./cmd/dnscrypt-proxy-updater
+          (cd dist && zip -q "../dnscrypt-proxy-updater-${VER}-windows-amd64.zip" dnscrypt-proxy-updater.exe)
+          GOOS=windows GOARCH=arm64 CGO_ENABLED=0 go build -ldflags "$LDFLAGS" -o dist/dnscrypt-proxy-updater.exe ./cmd/dnscrypt-proxy-updater
+          (cd dist && zip -q "../dnscrypt-proxy-updater-${VER}-windows-arm64.zip" dnscrypt-proxy-updater.exe)
+          ls -la *.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: test-build-windows
+          path: dnscrypt-proxy-updater-*-windows-*.zip
+          if-no-files-found: error
 
   schema-drift:
     runs-on: ubuntu-latest

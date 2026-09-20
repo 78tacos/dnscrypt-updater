@@ -77,7 +77,7 @@ Version detection tries `dnscrypt-proxy -version` then `--version`. It does **no
 
 ### Prebuilt binaries
 
-GitHub Releases publish `dnscrypt-proxy-updater.exe` zips for Windows amd64/arm64 (tray, no console) and headless archives for Linux/macOS.
+GitHub Releases publish `dnscrypt-proxy-updater.exe` zips for Windows amd64/arm64 (tray, no console) and headless archives for Linux/macOS. Pull-request CI also uploads a Windows tray zip as the **test-build-windows** artifact (this is not a GitHub Release).
 
 1. Open the latest [GitHub Release](https://github.com/78tacos/dnscrypt-updater/releases/latest).
 2. Windows: unzip `dnscrypt-proxy-updater-*-windows-amd64.zip` (or `windows-arm64` on ARM PCs) and run `dnscrypt-proxy-updater.exe`.
