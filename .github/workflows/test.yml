@@ -1,11 +1,9 @@
 name: test
 
 on:
-  # Same-repo PR branches used to fire both push and pull_request (duplicate builds).
-  # Run once per PR via pull_request; run on main via push.
+  # push only — avoids the duplicate push+pull_request pair on same-repo PR branches.
+  # Fork PRs do not get Actions from this; open a branch in-repo (or add pull_request later).
   push:
-    branches: [main]
-  pull_request:
 
 jobs:
   test:
