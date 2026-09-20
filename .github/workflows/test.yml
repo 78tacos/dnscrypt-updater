@@ -1,7 +1,10 @@
 name: test
 
 on:
+  # Same-repo PR branches used to fire both push and pull_request (duplicate builds).
+  # Run once per PR via pull_request; run on main via push.
   push:
+    branches: [main]
   pull_request:
 
 jobs:

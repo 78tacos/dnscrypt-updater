@@ -39,6 +39,9 @@ func TestTooltipAndMenu(t *testing.T) {
 	if installMenuTitle(up) != "Update dnscrypt-proxy now" {
 		t.Fatal(installMenuTitle(up))
 	}
+	if installMenuTitle(ok) != "Install / Update dnscrypt-proxy" {
+		t.Fatal(installMenuTitle(ok))
+	}
 }
 
 func TestIconsEmbedded(t *testing.T) {
