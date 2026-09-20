@@ -6,6 +6,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/78tacos/dnscrypt-updater/internal/proxyconf"
 	"github.com/getlantern/systray"
 )
 
@@ -39,11 +40,16 @@ func (rt *Runtime) onReady(ctx context.Context) {
 	mAsset.Disable()
 	systray.AddSeparator()
 	mCheck := systray.AddMenuItem("Check now", "Poll official DNSCrypt/dnscrypt-proxy releases")
-	mInstall := systray.AddMenuItem("Install dnscrypt-proxy", "Download, minisign-verify, and install for this system")
 	mOpen := systray.AddMenuItem("Open GitHub release page", "Open the official upstream release")
-	mSkip := systray.AddMenuItem("Skip this version", "Do not notify again for the current GitHub tag")
-	mSnooze := systray.AddMenuItem("Snooze 24 hours", "Suppress notifications for a day")
 	systray.AddSeparator()
+	mSettings := systray.AddMenuItem("Configure dnscrypt-proxy…", "Open the local settings UI")
+	mPending := systray.AddMenuItem("Apply pending settings", "Copy queued settings into the install dir and restart the service (may prompt for Administrator)")
+	mPending.Hide()
+	systray.AddSeparator()
+	mMore := systray.AddMenuItem("More", "Install, skip, and snooze")
+	mInstall := mMore.AddSubMenuItem("Install dnscrypt-proxy", "Download, minisign-verify, and install for this system")
+	mSkip := mMore.AddSubMenuItem("Skip this version", "Do not notify again for the current GitHub tag")
+	mSnooze := mMore.AddSubMenuItem("Snooze 24 hours", "Suppress notifications for a day")
 	mQuit := systray.AddMenuItem("Quit", "Quit "+AppName)
 
 	applyStatus := func() {
@@ -62,6 +68,13 @@ func (rt *Runtime) onReady(ctx context.Context) {
 			mInstall.Disable()
 		} else {
 			mInstall.Enable()
+		}
+		if proxyconf.ReadPending(rt.Paths.Pending).Present {
+			mPending.Show()
+			mPending.Enable()
+		} else {
+			mPending.Disable()
+			mPending.Hide()
 		}
 	}
 
@@ -128,9 +141,26 @@ func (rt *Runtime) onReady(ctx context.Context) {
 				} else {
 					rt.Log.Info("snoozed 24h")
 				}
+			case <-mSettings.ClickedCh:
+				if _, err := rt.OpenSettings(ctx); err != nil {
+					rt.Log.Warn("settings ui", "err", err)
+				}
+			case <-mPending.ClickedCh:
+				mPending.Disable()
+				mPending.SetTitle("Applying pending settings…")
+				res, err := rt.ApplyPending(ctx)
+				if err != nil {
+					rt.Log.Warn("apply pending", "err", err)
+				} else {
+					rt.Log.Info("apply pending", "msg", res.Message)
+				}
+				mPending.SetTitle("Apply pending settings")
+				applyStatus()
 			case <-mQuit.ClickedCh:
 				systray.Quit()
 				return
+			case <-rt.menuPing:
+				applyStatus()
 			}
 		}
 	}()

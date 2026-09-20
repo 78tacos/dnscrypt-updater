@@ -124,6 +124,16 @@ func (a *Applier) RelaunchElevated(args []string) (int, error) {
 	return a.relaunch(args)
 }
 
+// StopService stops the official dnscrypt-proxy service.
+func (a *Applier) StopService(ctx context.Context, binPath string) error {
+	return a.service().Stop(ctx, binPath)
+}
+
+// StartService starts the official dnscrypt-proxy service.
+func (a *Applier) StartService(ctx context.Context, binPath string) error {
+	return a.service().Start(ctx, binPath)
+}
+
 // Apply downloads, minisign-verifies, and installs the official archive for this OS.
 func (a *Applier) Apply(ctx context.Context, archive githubrel.SignedArchive, tag string, opts Options) (Result, error) {
 	out := Result{}

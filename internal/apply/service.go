@@ -54,6 +54,7 @@ func runCmd(ctx context.Context, dir, name string, args ...string) ([]byte, erro
 	var buf bytes.Buffer
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
+	hideConsole(cmd)
 	err := cmd.Run()
 	return buf.Bytes(), err
 }
@@ -71,21 +72,30 @@ func (s nativeService) proxyService(ctx context.Context, binPath, action string)
 	return nil
 }
 
+// CheckConfig runs `dnscrypt-proxy -config path -check`.
+func CheckConfig(ctx context.Context, bin, configPath string) error {
+	return runConfigCheck(ctx, bin, configPath)
+}
+
 func runConfigCheck(ctx context.Context, bin, configPath string) error {
 	if _, ok := ctx.Deadline(); !ok {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, 45*time.Second)
 		defer cancel()
 	}
+	if strings.TrimSpace(bin) == "" {
+		return fmt.Errorf("dnscrypt-proxy -check: binary path is empty")
+	}
 	cmd := exec.CommandContext(ctx, bin, "-config", configPath, "-check")
 	cmd.Dir = filepath.Dir(configPath)
+	hideConsole(cmd)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		msg := strings.TrimSpace(string(out))
 		if msg == "" {
 			msg = err.Error()
 		}
-		return fmt.Errorf("dnscrypt-proxy -check: %s", msg)
+		return fmt.Errorf("dnscrypt-proxy -check (%s): %s", bin, msg)
 	}
 	return nil
 }

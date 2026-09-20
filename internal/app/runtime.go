@@ -43,6 +43,10 @@ type Options struct {
 	NoDNS          bool
 	NoService      bool
 	InstallDir     string
+	Configure      bool
+	ApplyConfig    bool
+	ApplyPending   bool
+	Staging        string
 }
 
 // Runtime is the long-lived updater process.
@@ -59,6 +63,10 @@ type Runtime struct {
 	cancel context.CancelFunc
 
 	Applier *apply.Applier
+
+	settingsMu  sync.Mutex
+	settingsURL string
+	menuPing    chan struct{}
 }
 
 func NewRuntime(opts Options, log *slog.Logger) (*Runtime, error) {
@@ -100,7 +108,7 @@ func NewRuntime(opts Options, log *slog.Logger) (*Runtime, error) {
 		log = slog.Default()
 	}
 	ap := &apply.Applier{Log: log, UserAgent: UserAgent(), Getenv: os.Getenv}
-	return &Runtime{Opts: opts, Paths: paths, Engine: eng, Log: log, cfg: cfg, state: st, Applier: ap}, nil
+	return &Runtime{Opts: opts, Paths: paths, Engine: eng, Log: log, cfg: cfg, state: st, Applier: ap, menuPing: make(chan struct{}, 1)}, nil
 }
 
 func UserAgent() string {

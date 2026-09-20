@@ -27,10 +27,11 @@ func (nativeDNS) SetLoopback(ctx context.Context) error {
 		ctx, cancel = context.WithTimeout(ctx, 60*time.Second)
 		defer cancel()
 	}
-	cmd := exec.CommandContext(ctx, "powershell", "-NoProfile", "-NonInteractive", "-Command", windowsDNSScript)
+	cmd := exec.CommandContext(ctx, "powershell", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", windowsDNSScript)
 	var buf bytes.Buffer
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
+	hideConsole(cmd)
 	if err := cmd.Run(); err != nil {
 		msg := strings.TrimSpace(buf.String())
 		if msg == "" {

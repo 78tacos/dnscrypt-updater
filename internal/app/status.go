@@ -64,7 +64,7 @@ func installMenuTitle(res check.Result) string {
 	case res.UpdateAvailable:
 		return "Update dnscrypt-proxy now"
 	default:
-		return "Reinstall dnscrypt-proxy"
+		return "Install / Update dnscrypt-proxy"
 	}
 }
 

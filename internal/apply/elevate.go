@@ -7,4 +7,6 @@ var (
 	ErrElevationUnsupported = errors.New("automatic elevation is only supported on Windows")
 	// ErrElevationCancelled is returned when the user dismisses the UAC prompt.
 	ErrElevationCancelled = errors.New("administrator permission was declined")
+	// ErrElevationFailed is returned when an elevated child exits non-zero.
+	ErrElevationFailed = errors.New("elevated process failed")
 )
