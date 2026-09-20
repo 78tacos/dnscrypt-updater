@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>dnscrypt-proxy settings</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div>
+      <p class="eyebrow">dnscrypt-proxy-updater</p>
+      <h1>dnscrypt-proxy settings</h1>
+    </div>
+    <div class="top-meta" id="meta"></div>
+  </header>
+
+  <div class="banner hidden" id="missing"></div>
+  <div class="banner warn hidden" id="status"></div>
+
+  <div class="toolbar">
+    <nav class="tabs" role="tablist">
+      <button class="tab on" data-tab="easy">Easy</button>
+      <button class="tab" data-tab="advanced">Advanced</button>
+      <button class="tab" data-tab="lists">List files</button>
+    </nav>
+    <input id="search" type="search" placeholder="Search keys, help, examples…">
+    <button id="save" class="primary" type="button">Save and apply</button>
+  </div>
+
+  <section id="panel-easy" class="panel">
+    <div class="card" id="suggestions"></div>
+    <div class="card">
+      <h2>Presets</h2>
+      <p class="muted">Overlays change a few keys. Review the form, then save. Unknown keys in your toml are never rewritten.</p>
+      <div class="preset-row" id="presets"></div>
+    </div>
+    <div id="easy-fields"></div>
+  </section>
+
+  <section id="panel-advanced" class="panel hidden">
+    <div id="advanced-fields"></div>
+  </section>
+
+  <section id="panel-lists" class="panel hidden">
+    <p class="muted">These files live next to <code>dnscrypt-proxy.toml</code>. Enabling a toml path that points at a missing file copies the upstream example.</p>
+    <div id="list-files"></div>
+  </section>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -34,6 +34,9 @@ func run(args []string) int {
 	noDNS := fs.Bool("no-dns", false, "with -install, do not change system DNS")
 	noService := fs.Bool("no-service", false, "with -install, copy files only (do not install/start the service)")
 	installDir := fs.String("install-dir", "", "with -install, destination directory")
+	doConfigure := fs.Bool("configure", false, "open the local dnscrypt-proxy settings UI (loopback HTTP)")
+	doApplyConfig := fs.Bool("apply-config", false, "commit a staged settings directory (used after UAC)")
+	staging := fs.String("staging", "", "with -apply-config, directory of patched toml/list files")
 
 	if err := fs.Parse(args); err != nil {
 		return 2
@@ -69,6 +72,9 @@ func run(args []string) int {
 		NoDNS:          *noDNS,
 		NoService:      *noService,
 		InstallDir:     *installDir,
+		Configure:      *doConfigure,
+		ApplyConfig:    *doApplyConfig,
+		Staging:        *staging,
 	}, log)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -77,6 +83,30 @@ func run(args []string) int {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
+
+	if *doApplyConfig {
+		res, err := rt.ApplyStaged(ctx, *staging)
+		if err != nil {
+			if !*quiet {
+				fmt.Fprintln(os.Stderr, err)
+			}
+			return 1
+		}
+		if !*quiet {
+			fmt.Fprintln(os.Stdout, res.Message)
+		}
+		return 0
+	}
+
+	if *doConfigure {
+		if err := rt.RunSettingsUI(ctx); err != nil {
+			if !*quiet {
+				fmt.Fprintln(os.Stderr, err)
+			}
+			return 1
+		}
+		return 0
+	}
 
 	if *doInstall {
 		res, err := rt.Install(ctx)

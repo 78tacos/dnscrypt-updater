@@ -43,6 +43,9 @@ type Options struct {
 	NoDNS          bool
 	NoService      bool
 	InstallDir     string
+	Configure      bool
+	ApplyConfig    bool
+	Staging        string
 }
 
 // Runtime is the long-lived updater process.
@@ -59,6 +62,9 @@ type Runtime struct {
 	cancel context.CancelFunc
 
 	Applier *apply.Applier
+
+	settingsMu  sync.Mutex
+	settingsURL string
 }
 
 func NewRuntime(opts Options, log *slog.Logger) (*Runtime, error) {

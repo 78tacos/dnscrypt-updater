@@ -71,6 +71,11 @@ func (s nativeService) proxyService(ctx context.Context, binPath, action string)
 	return nil
 }
 
+// CheckConfig runs `dnscrypt-proxy -config path -check`.
+func CheckConfig(ctx context.Context, bin, configPath string) error {
+	return runConfigCheck(ctx, bin, configPath)
+}
+
 func runConfigCheck(ctx context.Context, bin, configPath string) error {
 	if _, ok := ctx.Deadline(); !ok {
 		var cancel context.CancelFunc

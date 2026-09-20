@@ -44,6 +44,7 @@ func (rt *Runtime) onReady(ctx context.Context) {
 	mSkip := systray.AddMenuItem("Skip this version", "Do not notify again for the current GitHub tag")
 	mSnooze := systray.AddMenuItem("Snooze 24 hours", "Suppress notifications for a day")
 	systray.AddSeparator()
+	mSettings := systray.AddMenuItem("Configure dnscrypt-proxy…", "Open the local settings UI")
 	mQuit := systray.AddMenuItem("Quit", "Quit "+AppName)
 
 	applyStatus := func() {
@@ -127,6 +128,10 @@ func (rt *Runtime) onReady(ctx context.Context) {
 					rt.Log.Warn("snooze", "err", err)
 				} else {
 					rt.Log.Info("snoozed 24h")
+				}
+			case <-mSettings.ClickedCh:
+				if _, err := rt.OpenSettings(ctx); err != nil {
+					rt.Log.Warn("settings ui", "err", err)
 				}
 			case <-mQuit.ClickedCh:
 				systray.Quit()

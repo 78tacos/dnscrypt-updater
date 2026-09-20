@@ -14,6 +14,12 @@ func TestValidateReleaseURL(t *testing.T) {
 	if _, err := ValidateReleaseURL("https://github.com/DNSCrypt/dnscrypt-proxy/releases"); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := ValidateLoopbackURL("http://127.0.0.1:5380/?token=abc"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ValidateLoopbackURL("https://example.com/"); err == nil {
+		t.Fatal("expected reject remote host")
+	}
 
 	bads := []string{
 		"",
