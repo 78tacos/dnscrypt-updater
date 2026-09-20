@@ -6,7 +6,7 @@ import (
 )
 
 func TestUpdateAvailableMessage(t *testing.T) {
-	t.Parallel()
+	// Not parallel: these tests swap the package-level Send hook.
 	var title, msg, icon string
 	orig := Send
 	t.Cleanup(func() { Send = orig })
@@ -31,7 +31,6 @@ func TestUpdateAvailableMessage(t *testing.T) {
 }
 
 func TestNotFound(t *testing.T) {
-	t.Parallel()
 	orig := Send
 	t.Cleanup(func() { Send = orig })
 	Send = func(string, string, string) error { return nil }
@@ -41,7 +40,6 @@ func TestNotFound(t *testing.T) {
 }
 
 func TestSettingsQueued(t *testing.T) {
-	t.Parallel()
 	var title, msg string
 	orig := Send
 	t.Cleanup(func() { Send = orig })
