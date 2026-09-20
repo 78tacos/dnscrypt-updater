@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -27,10 +28,14 @@ type ApplyEnv struct {
 	StartService  func(ctx context.Context, bin string) error
 }
 
-// ApplyResult is the outcome of a commit.
+// ApplyResult is the outcome of a commit or a queued pending bundle.
 type ApplyResult struct {
-	TomlPath string `json:"toml_path"`
-	Message  string `json:"message"`
+	TomlPath   string   `json:"toml_path"`
+	Message    string   `json:"message"`
+	Applied    bool     `json:"applied"`
+	Pending    bool     `json:"pending"`
+	PendingDir string   `json:"pending_dir,omitempty"`
+	Files      []string `json:"files,omitempty"`
 }
 
 func tomlPath(installDir string) string {
@@ -182,11 +187,74 @@ func Commit(ctx context.Context, env ApplyEnv, staging string) (ApplyResult, err
 			return out, fmt.Errorf("service start failed: %w", err)
 		}
 	}
+	out.Applied = true
 	out.Message = "Saved dnscrypt-proxy.toml and restarted the service."
 	if !env.ManageService {
 		out.Message = "Saved dnscrypt-proxy.toml. Restart dnscrypt-proxy to apply."
 	}
 	return out, nil
+}
+
+// TryCommit writes the live install if possible. On a detectable privilege
+// failure it queues the checked files in pendingDir (user AppData) instead.
+func TryCommit(ctx context.Context, env ApplyEnv, staging, pendingDir string, writable bool, elevate func(context.Context, string) error) (ApplyResult, error) {
+	if err := checkStaging(ctx, env, staging); err != nil {
+		return ApplyResult{}, err
+	}
+	if !writable && elevate != nil {
+		if err := elevate(ctx, staging); err != nil {
+			if IsPrivilegeError(err) {
+				return queuePending(staging, pendingDir, env.InstallDir, err)
+			}
+			return ApplyResult{}, err
+		}
+		_ = ClearPending(pendingDir)
+		return ApplyResult{
+			TomlPath: tomlPath(env.InstallDir),
+			Message:  "Saved dnscrypt-proxy settings with administrator permission.",
+			Applied:  true,
+		}, nil
+	}
+	res, err := Commit(ctx, env, staging)
+	if err != nil {
+		if IsPrivilegeError(err) {
+			return queuePending(staging, pendingDir, env.InstallDir, err)
+		}
+		return res, err
+	}
+	_ = ClearPending(pendingDir)
+	return res, nil
+}
+
+func checkStaging(ctx context.Context, env ApplyEnv, staging string) error {
+	if env.Check == nil || strings.TrimSpace(env.BinaryPath) == "" {
+		return nil
+	}
+	return env.Check(ctx, env.BinaryPath, filepath.Join(staging, tomlName))
+}
+
+func queuePending(staging, pendingDir, installDir string, cause error) (ApplyResult, error) {
+	if strings.TrimSpace(pendingDir) == "" {
+		return ApplyResult{}, cause
+	}
+	st, err := SavePending(staging, pendingDir, installDir, cause.Error())
+	if err != nil {
+		return ApplyResult{}, fmt.Errorf("%w (also failed to queue pending settings: %v)", cause, err)
+	}
+	return ApplyResult{
+		TomlPath:   tomlPath(installDir),
+		Message:    pendingOfferMessage(installDir, st.Dir),
+		Pending:    true,
+		PendingDir: st.Dir,
+		Files:      st.Files,
+	}, nil
+}
+
+func pendingOfferMessage(installDir, pendingDir string) string {
+	if runtime.GOOS == "windows" {
+		return fmt.Sprintf("Could not write %s (administrator permission needed). Settings are queued in %s. Right-click the tray icon and choose Apply pending settings, or download the zip from this page.", installDir, pendingDir)
+	}
+	return fmt.Sprintf("Could not write %s (root permission needed). Settings are queued in %s. Apply from the tray, or run: sudo dnscrypt-proxy-updater -apply-pending — or download the zip from this page.", installDir, pendingDir)
 }
 
 func commitName(name string) bool {

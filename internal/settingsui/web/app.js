@@ -92,11 +92,53 @@
     }
     $("save").disabled = !state.toml_exists;
 
+    renderPending();
     renderSuggestions();
     renderPresets();
     renderEasy();
     renderAdvanced();
     renderFiles();
+  }
+
+  function zipURL() {
+    const u = new URL("/api/pending.zip", location.origin);
+    u.searchParams.set("token", token);
+    return u.toString();
+  }
+
+  function renderPending() {
+    const el = $("pending-banner");
+    const p = state.pending;
+    if (!p || !p.present) {
+      el.classList.add("hidden");
+      el.innerHTML = "";
+      return;
+    }
+    el.classList.remove("hidden");
+    el.innerHTML =
+      "<strong>Queued settings</strong> could not be written to the install directory. They are saved in <code>" +
+      esc(p.dir) +
+      "</code>. Right-click the tray icon and choose <strong>Apply pending settings</strong> (Administrator or root may be required)." +
+      '<div class="row"><a class="chip" href="' +
+      zipURL() +
+      '">Download zip</a><button type="button" class="ghost" id="discard-pending">Discard queued files</button></div>';
+    $("discard-pending").addEventListener("click", discardPending);
+  }
+
+  async function discardPending() {
+    const res = await api("/api/pending", { method: "DELETE", headers });
+    if (!res.ok) {
+      showStatus("Could not discard queued files: " + (await res.text()), "warn");
+      return;
+    }
+    await load();
+  }
+
+  function showStatus(text, kind) {
+    const el = $("status");
+    el.classList.remove("hidden", "warn", "ok");
+    el.classList.add(kind === "ok" ? "ok" : "warn");
+    el.textContent = text;
   }
 
   function renderSuggestions() {
@@ -367,17 +409,19 @@
       body: JSON.stringify({ patches, files }),
     });
     const text = await res.text();
-    $("status").classList.remove("hidden");
     if (!res.ok) {
-      $("status").textContent = "Save failed: " + text;
+      showStatus("Save failed: " + text, "warn");
       $("save").disabled = false;
       return;
     }
     let msg = "Saved.";
+    let pending = false;
     try {
-      msg = JSON.parse(text).message || msg;
+      const data = JSON.parse(text);
+      msg = data.message || msg;
+      pending = !!data.pending;
     } catch {}
-    $("status").textContent = msg;
+    showStatus(msg, pending ? "warn" : "ok");
     await load();
   }
 

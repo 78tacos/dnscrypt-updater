@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/78tacos/dnscrypt-updater/internal/apply"
+	"github.com/78tacos/dnscrypt-updater/internal/notify"
 	"github.com/78tacos/dnscrypt-updater/internal/openurl"
 	"github.com/78tacos/dnscrypt-updater/internal/proxyconf"
 	"github.com/78tacos/dnscrypt-updater/internal/settingsui"
@@ -54,6 +55,15 @@ func (rt *Runtime) settingsOpts() settingsui.Options {
 		Check:        apply.CheckConfig,
 		StopService:  ap.StopService,
 		StartService: ap.StartService,
+		PendingDir:   func() string { return rt.Paths.Pending },
+		OnPending: func(st proxyconf.PendingStatus) {
+			rt.pingMenu()
+			if st.Present {
+				if nerr := notify.SettingsQueued(st.Dir); nerr != nil {
+					rt.Log.Warn("pending settings notification", "err", nerr)
+				}
+			}
+		},
 	}
 }
 
@@ -124,7 +134,7 @@ func (rt *Runtime) ApplyStaged(ctx context.Context, staging string) (proxyconf.A
 	manage := rt.cfg.ManageService && !rt.Opts.NoService
 	rt.mu.Unlock()
 	ap := rt.applier()
-	return proxyconf.Commit(ctx, proxyconf.ApplyEnv{
+	res, err := proxyconf.Commit(ctx, proxyconf.ApplyEnv{
 		InstallDir:    dir,
 		BinaryPath:    bin,
 		ManageService: manage,
@@ -132,4 +142,56 @@ func (rt *Runtime) ApplyStaged(ctx context.Context, staging string) (proxyconf.A
 		StopService:   ap.StopService,
 		StartService:  ap.StartService,
 	}, staging)
+	if err != nil {
+		return res, err
+	}
+	if pending := strings.TrimSpace(rt.Paths.Pending); pending != "" {
+		_ = proxyconf.ClearPending(pending)
+	}
+	rt.pingMenu()
+	return res, nil
+}
+
+// ApplyPending copies a queued AppData bundle into the install dir.
+// On Windows this prompts UAC for a one-shot -apply-config; the tray stays in userspace.
+func (rt *Runtime) ApplyPending(ctx context.Context) (proxyconf.ApplyResult, error) {
+	pending := strings.TrimSpace(rt.Paths.Pending)
+	st := proxyconf.ReadPending(pending)
+	if !st.Present {
+		return proxyconf.ApplyResult{}, fmt.Errorf("no pending settings in %s", pending)
+	}
+	rt.Log.Info("applying pending settings", "dir", pending, "install", st.InstallDir)
+	if rt.applier().NeedsWindowsElevation() {
+		if err := rt.elevateApply(pending); err != nil {
+			_ = notify.SettingsApplyFailed(err)
+			return proxyconf.ApplyResult{}, err
+		}
+		_ = proxyconf.ClearPending(pending)
+		rt.pingMenu()
+		msg := "Applied pending settings with administrator permission."
+		_ = notify.SettingsApplied(msg)
+		dir, _ := rt.proxyPaths()
+		return proxyconf.ApplyResult{
+			TomlPath: filepath.Join(dir, "dnscrypt-proxy.toml"),
+			Message:  msg,
+			Applied:  true,
+		}, nil
+	}
+	res, err := rt.ApplyStaged(ctx, pending)
+	if err != nil {
+		_ = notify.SettingsApplyFailed(err)
+		return res, err
+	}
+	_ = notify.SettingsApplied(res.Message)
+	return res, nil
+}
+
+func (rt *Runtime) pingMenu() {
+	if rt == nil || rt.menuPing == nil {
+		return
+	}
+	select {
+	case rt.menuPing <- struct{}{}:
+	default:
+	}
 }

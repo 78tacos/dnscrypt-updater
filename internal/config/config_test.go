@@ -109,6 +109,9 @@ func TestResolvePathsExplicit(t *testing.T) {
 	if p.State != filepath.Join(dir, "state.json") {
 		t.Fatalf("state %s", p.State)
 	}
+	if p.Pending != filepath.Join(dir, "pending") {
+		t.Fatalf("pending %s", p.Pending)
+	}
 }
 
 func TestSaveStateAtomic(t *testing.T) {

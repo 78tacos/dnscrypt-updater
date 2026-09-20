@@ -36,6 +36,7 @@ func run(args []string) int {
 	installDir := fs.String("install-dir", "", "with -install, destination directory")
 	doConfigure := fs.Bool("configure", false, "open the local dnscrypt-proxy settings UI (loopback HTTP)")
 	doApplyConfig := fs.Bool("apply-config", false, "commit a staged settings directory (used after UAC)")
+	doApplyPending := fs.Bool("apply-pending", false, "commit queued settings from the user config pending folder")
 	staging := fs.String("staging", "", "with -apply-config, directory of patched toml/list files")
 
 	if err := fs.Parse(args); err != nil {
@@ -74,6 +75,7 @@ func run(args []string) int {
 		InstallDir:     *installDir,
 		Configure:      *doConfigure,
 		ApplyConfig:    *doApplyConfig,
+		ApplyPending:   *doApplyPending,
 		Staging:        *staging,
 	}, log)
 	if err != nil {
@@ -86,6 +88,20 @@ func run(args []string) int {
 
 	if *doApplyConfig {
 		res, err := rt.ApplyStaged(ctx, *staging)
+		if err != nil {
+			if !*quiet {
+				fmt.Fprintln(os.Stderr, err)
+			}
+			return 1
+		}
+		if !*quiet {
+			fmt.Fprintln(os.Stdout, res.Message)
+		}
+		return 0
+	}
+
+	if *doApplyPending {
+		res, err := rt.ApplyPending(ctx)
 		if err != nil {
 			if !*quiet {
 				fmt.Fprintln(os.Stderr, err)

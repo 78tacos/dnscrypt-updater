@@ -89,5 +89,7 @@ textarea { min-height: 180px; font-family: ui-monospace, Consolas, monospace; fo
   padding: 12px 14px; border-radius: 10px; margin: 8px 0;
 }
 .banner.warn { background: #2a2416; border-color: #8a6a1f; }
+.banner.ok { background: #172c22; border-color: #2e6b4f; }
+a.chip { text-decoration: none; display: inline-block; }
 .dirty { outline: 1px solid var(--accent); }
 .en { accent-color: var(--accent); }

@@ -33,6 +33,9 @@ type Options struct {
 	Check          func(ctx context.Context, bin, configPath string) error
 	StopService    func(ctx context.Context, bin string) error
 	StartService   func(ctx context.Context, bin string) error
+	PendingDir     func() string
+	CanWrite       func(path string) bool
+	OnPending      func(proxyconf.PendingStatus)
 }
 
 // Server is a 127.0.0.1 HTTP UI.
@@ -92,6 +95,8 @@ func (s *Server) Handler() http.Handler {
 	})
 	mux.HandleFunc("/api/state", s.handleState)
 	mux.HandleFunc("/api/apply", s.handleApply)
+	mux.HandleFunc("/api/pending.zip", s.handlePendingZip)
+	mux.HandleFunc("/api/pending", s.handlePending)
 	return mux
 }
 
@@ -154,6 +159,7 @@ type snapshot struct {
 	Presets        []proxyconf.Preset         `json:"presets"`
 	Suggestions    []proxyconf.Suggestion     `json:"suggestions"`
 	MissingProxy   bool                       `json:"missing_proxy"`
+	Pending        proxyconf.PendingStatus    `json:"pending"`
 }
 
 func (s *Server) locate() (installDir, binaryPath string, manageService bool) {
@@ -201,11 +207,33 @@ func (s *Server) snapshot() (snapshot, error) {
 	} else if _, err := os.Stat(binaryPath); err != nil {
 		out.MissingProxy = true
 	}
-	out.Writable = out.TomlExists && proxyconf.CanWrite(out.TomlPath)
+	out.Writable = out.TomlExists && s.canWrite(out.TomlPath)
 	if s.opts.NeedsElevation != nil {
 		out.NeedsElevation = s.opts.NeedsElevation() && !out.Writable
 	}
+	out.Pending = proxyconf.ReadPending(s.pendingDir())
 	return out, nil
+}
+
+func (s *Server) pendingDir() string {
+	if s.opts.PendingDir != nil {
+		return s.opts.PendingDir()
+	}
+	return ""
+}
+
+func (s *Server) canWrite(path string) bool {
+	if s.opts.CanWrite != nil {
+		return s.opts.CanWrite(path)
+	}
+	return proxyconf.CanWrite(path)
+}
+
+func (s *Server) notifyPending() {
+	if s.opts.OnPending == nil {
+		return
+	}
+	s.opts.OnPending(proxyconf.ReadPending(s.pendingDir()))
 }
 
 func (s *Server) handleApply(w http.ResponseWriter, r *http.Request) {
@@ -250,12 +278,7 @@ func (s *Server) apply(ctx context.Context, req proxyconf.ApplyRequest) (proxyco
 	if err != nil {
 		return proxyconf.ApplyResult{}, err
 	}
-	keepStaging := false
-	defer func() {
-		if !keepStaging {
-			_ = os.RemoveAll(staging)
-		}
-	}()
+	defer func() { _ = os.RemoveAll(staging) }()
 	if err := proxyconf.Stage(installDir, staging, req, s.cat); err != nil {
 		return proxyconf.ApplyResult{}, err
 	}
@@ -267,20 +290,51 @@ func (s *Server) apply(ctx context.Context, req proxyconf.ApplyRequest) (proxyco
 		StopService:   s.opts.StopService,
 		StartService:  s.opts.StartService,
 	}
-	writable := proxyconf.CanWrite(toml)
+	writable := s.canWrite(toml)
+	var elevate func(context.Context, string) error
 	if !writable && s.opts.NeedsElevation != nil && s.opts.NeedsElevation() && s.opts.Elevate != nil {
-		keepStaging = true
-		if err := s.opts.Elevate(ctx, staging); err != nil {
-			_ = os.RemoveAll(staging)
-			return proxyconf.ApplyResult{}, err
-		}
-		_ = os.RemoveAll(staging)
-		return proxyconf.ApplyResult{
-			TomlPath: toml,
-			Message:  "Saved dnscrypt-proxy settings with administrator permission.",
-		}, nil
+		elevate = s.opts.Elevate
 	}
-	return proxyconf.Commit(ctx, env, staging)
+	res, err := proxyconf.TryCommit(ctx, env, staging, s.pendingDir(), writable, elevate)
+	if err != nil {
+		return res, err
+	}
+	s.notifyPending()
+	return res, nil
+}
+
+func (s *Server) handlePendingZip(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method", http.StatusMethodNotAllowed)
+		return
+	}
+	if !s.tokenOK(r) {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", `attachment; filename="dnscrypt-proxy-settings.zip"`)
+	if err := proxyconf.WritePendingZip(s.pendingDir(), w); err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+}
+
+func (s *Server) handlePending(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, "method", http.StatusMethodNotAllowed)
+		return
+	}
+	if !s.tokenOK(r) {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if err := proxyconf.ClearPending(s.pendingDir()); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.notifyPending()
+	writeJSON(w, proxyconf.ReadPending(s.pendingDir()))
 }
 
 func writeJSON(w http.ResponseWriter, v any) {

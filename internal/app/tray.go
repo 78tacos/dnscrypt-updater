@@ -6,6 +6,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/78tacos/dnscrypt-updater/internal/proxyconf"
 	"github.com/getlantern/systray"
 )
 
@@ -45,6 +46,8 @@ func (rt *Runtime) onReady(ctx context.Context) {
 	mSnooze := systray.AddMenuItem("Snooze 24 hours", "Suppress notifications for a day")
 	systray.AddSeparator()
 	mSettings := systray.AddMenuItem("Configure dnscrypt-proxy…", "Open the local settings UI")
+	mPending := systray.AddMenuItem("Apply pending settings", "Copy queued settings into the install dir and restart the service (may prompt for Administrator)")
+	mPending.Hide()
 	mQuit := systray.AddMenuItem("Quit", "Quit "+AppName)
 
 	applyStatus := func() {
@@ -63,6 +66,13 @@ func (rt *Runtime) onReady(ctx context.Context) {
 			mInstall.Disable()
 		} else {
 			mInstall.Enable()
+		}
+		if proxyconf.ReadPending(rt.Paths.Pending).Present {
+			mPending.Show()
+			mPending.Enable()
+		} else {
+			mPending.Disable()
+			mPending.Hide()
 		}
 	}
 
@@ -133,9 +143,22 @@ func (rt *Runtime) onReady(ctx context.Context) {
 				if _, err := rt.OpenSettings(ctx); err != nil {
 					rt.Log.Warn("settings ui", "err", err)
 				}
+			case <-mPending.ClickedCh:
+				mPending.Disable()
+				mPending.SetTitle("Applying pending settings…")
+				res, err := rt.ApplyPending(ctx)
+				if err != nil {
+					rt.Log.Warn("apply pending", "err", err)
+				} else {
+					rt.Log.Info("apply pending", "msg", res.Message)
+				}
+				mPending.SetTitle("Apply pending settings")
+				applyStatus()
 			case <-mQuit.ClickedCh:
 				systray.Quit()
 				return
+			case <-rt.menuPing:
+				applyStatus()
 			}
 		}
 	}()

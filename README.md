@@ -42,7 +42,7 @@ Tray **Configure dnscrypt-proxy…** (or `-configure`) opens a **127.0.0.1** pag
 - **Easy** tab: common keys, presets (overlays, not a full rewrite), clickable examples from upstream comments, and dismissible suggestions.
 - **Advanced** tab: the full generated catalog.
 - **List files**: `forwarding-rules.txt`, `cloaking-rules.txt`, block/allow lists, captive-portal map. Auto-downloaded `public-resolvers.md` / relays caches are not rewritten.
-- Save writes a backup (`*.bak`), patches keys in place, runs `dnscrypt-proxy -check`, then restarts the service. On Windows, Program Files writes re-use the existing UAC prompt (`-apply-config`).
+- Save writes a backup (`*.bak`), patches keys in place, runs `dnscrypt-proxy -check`, then restarts the service. On Windows, Program Files writes try a one-shot UAC prompt (`-apply-config`) while the tray stays in userspace. If that is declined or the install dir is not writable, the checked files are queued in the user config `pending` folder (`%APPDATA%\dnscrypt-proxy-updater\pending` on Windows). Download a zip from the settings page, or right-click the tray and choose **Apply pending settings** (UAC only for that copy). Linux/macOS: same queue, then tray apply or `sudo dnscrypt-proxy-updater -apply-pending`. Invalid `-check` results are never queued.
 
 ```bash
 dnscrypt-proxy-updater -configure
@@ -121,7 +121,7 @@ ARM64:
 GOOS=windows GOARCH=arm64 CGO_ENABLED=0 go build -ldflags "-H=windowsgui -s -w" -o dnscrypt-proxy-updater-arm64.exe ./cmd/dnscrypt-proxy-updater
 ```
 
-Run `dnscrypt-proxy-updater.exe`. The tray menu shows local vs GitHub, the official signed archive, **Check now**, **Install / Update dnscrypt-proxy**, **Configure dnscrypt-proxy…**, **Open GitHub release page**, **Skip this version**, **Snooze 24 hours**, **Quit**.
+Run `dnscrypt-proxy-updater.exe`. The tray menu shows local vs GitHub, the official signed archive, **Check now**, **Install / Update dnscrypt-proxy**, **Configure dnscrypt-proxy…**, **Apply pending settings** (when a save could not write the install dir), **Open GitHub release page**, **Skip this version**, **Snooze 24 hours**, **Quit**.
 
 Windows archives on GitHub are `win64` / `win32` / `winarm` zips (plus unsigned `.msi` files, which this app ignores because they have no `.minisig`).
 
@@ -151,7 +151,7 @@ See [`config.example.json`](config.example.json).
 | `set_system_dns` | `true` | After install on Windows, set connected adapters to `127.0.0.1`. |
 | `manage_service` | `true` | Install/start `dnscrypt-proxy -service`. |
 
-CLI: `-install`, `-configure`, `-apply-config` (internal, after UAC), `-no-dns`, `-no-service`, `-install-dir`, `-current-version`, `-binary-path`, `-config`, `-no-notify`, `-notify` (with `-check-once`), `-quiet`.
+CLI: `-install`, `-configure`, `-apply-pending`, `-apply-config` (internal, after UAC), `-no-dns`, `-no-service`, `-install-dir`, `-current-version`, `-binary-path`, `-config`, `-no-notify`, `-notify` (with `-check-once`), `-quiet`.
 
 ### Quiet / start with the OS
 
