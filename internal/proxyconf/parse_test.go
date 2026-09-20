@@ -40,6 +40,12 @@ func TestLoadCatalog(t *testing.T) {
 		if f.Help == "" && p != "sources.public-resolvers.urls" {
 			t.Fatalf("%s has empty help", p)
 		}
+		if strings.Contains(f.Help, "This is an example configuration file") {
+			t.Fatalf("%s help leaked file header: %q", p, f.Help)
+		}
+		if strings.Contains(f.Help, "######") {
+			t.Fatalf("%s help leaked hash banner: %q", p, f.Help)
+		}
 	}
 	listen, _ := cat.FieldByPath("listen_addresses")
 	if listen.Type != TypeStringList {
@@ -51,6 +57,9 @@ func TestLoadCatalog(t *testing.T) {
 	names, _ := cat.FieldByPath("server_names")
 	if !names.Commented {
 		t.Fatal("server_names should be commented in the example")
+	}
+	if !strings.Contains(names.Help, "List of servers to use") {
+		t.Fatalf("server_names help too short: %q", names.Help)
 	}
 	if listen.Easy != true || names.Easy != true {
 		t.Fatal("easy flags")

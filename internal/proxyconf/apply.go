@@ -149,6 +149,9 @@ func Commit(ctx context.Context, env ApplyEnv, staging string) (ApplyResult, err
 		if e.IsDir() {
 			continue
 		}
+		if !commitName(e.Name()) {
+			continue
+		}
 		src := filepath.Join(staging, e.Name())
 		dst := filepath.Join(env.InstallDir, e.Name())
 		if _, err := os.Stat(dst); err == nil {
@@ -184,4 +187,11 @@ func Commit(ctx context.Context, env ApplyEnv, staging string) (ApplyResult, err
 		out.Message = "Saved dnscrypt-proxy.toml. Restart dnscrypt-proxy to apply."
 	}
 	return out, nil
+}
+
+func commitName(name string) bool {
+	if name == tomlName {
+		return true
+	}
+	return allowedCompanion(name)
 }

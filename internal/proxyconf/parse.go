@@ -40,6 +40,12 @@ func parseExampleTOML(src string, types map[string]string) (Catalog, error) {
 		if title, ok := bannerTitle(trim); ok {
 			sectionTitle = title
 			sectionHelp = ""
+			help = help[:0]
+			i++
+			continue
+		}
+		if isDecorHash(trim) {
+			help = help[:0]
 			i++
 			continue
 		}
@@ -165,6 +171,19 @@ func bannerTitle(trim string) (string, bool) {
 		return "", false
 	}
 	return inner, true
+}
+
+func isDecorHash(trim string) bool {
+	s := strings.ReplaceAll(trim, " ", "")
+	if len(s) < 8 {
+		return false
+	}
+	for _, r := range s {
+		if r != '#' {
+			return false
+		}
+	}
+	return true
 }
 
 func isHelpComment(trim string) bool {

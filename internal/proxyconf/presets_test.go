@@ -91,6 +91,38 @@ func TestStageAndCommit(t *testing.T) {
 	}
 }
 
+func TestCommitSkipsResolverCaches(t *testing.T) {
+	t.Parallel()
+	install := t.TempDir()
+	staging := t.TempDir()
+	if err := os.WriteFile(filepath.Join(install, "dnscrypt-proxy.toml"), []byte("listen_addresses = ['127.0.0.1:53']\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(install, "public-resolvers.md"), []byte("LIVE"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(staging, "dnscrypt-proxy.toml"), []byte("listen_addresses = ['127.0.0.1:53']\nforce_tcp = true\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(staging, "public-resolvers.md"), []byte("STAGED"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Commit(context.Background(), ApplyEnv{
+		InstallDir: install,
+		Check:      func(context.Context, string, string) error { return nil },
+	}, staging)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(filepath.Join(install, "public-resolvers.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "LIVE" {
+		t.Fatalf("resolver cache rewritten: %q", got)
+	}
+}
+
 func TestRefuseUnknownListFile(t *testing.T) {
 	t.Parallel()
 	if _, err := resolveListPath("/tmp", "public-resolvers.md"); err == nil {
