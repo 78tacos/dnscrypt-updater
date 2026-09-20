@@ -148,7 +148,12 @@ func Commit(ctx context.Context, env ApplyEnv, staging string) (ApplyResult, err
 		return out, err
 	}
 	if env.ManageService && env.StopService != nil && env.BinaryPath != "" {
-		_ = env.StopService(ctx, env.BinaryPath)
+		if err := env.StopService(ctx, env.BinaryPath); err != nil {
+			// Keep going: some installs stop cleanly even when this reports an error,
+			// and a later write error still triggers elevation / pending fallback.
+			// A hard privilege failure here is handled when the write fails.
+			_ = err
+		}
 	}
 	for _, e := range entries {
 		if e.IsDir() {
@@ -161,13 +166,21 @@ func Commit(ctx context.Context, env ApplyEnv, staging string) (ApplyResult, err
 		dst := filepath.Join(env.InstallDir, e.Name())
 		if _, err := os.Stat(dst); err == nil {
 			if err := copyFile(dst, backupPath(dst)); err != nil {
-				rollback()
-				return out, fmt.Errorf("backup %s: %w", dst, err)
+				if retryErr := retryAfterStop(ctx, env, err, func() error {
+					return copyFile(dst, backupPath(dst))
+				}); retryErr != nil {
+					rollback()
+					return out, fmt.Errorf("backup %s: %w", dst, retryErr)
+				}
 			}
 		}
 		if err := copyFile(src, dst); err != nil {
-			rollback()
-			return out, fmt.Errorf("write %s: %w", dst, err)
+			if retryErr := retryAfterStop(ctx, env, err, func() error {
+				return copyFile(src, dst)
+			}); retryErr != nil {
+				rollback()
+				return out, fmt.Errorf("write %s: %w", dst, retryErr)
+			}
 		}
 		copied = append(copied, dst)
 	}
@@ -195,18 +208,32 @@ func Commit(ctx context.Context, env ApplyEnv, staging string) (ApplyResult, err
 	return out, nil
 }
 
-// TryCommit writes the live install if possible. On a detectable privilege
-// failure it queues the checked files in pendingDir (user AppData) instead.
+// TryCommit writes the live install if possible.
+//
+// Order matters: always attempt an in-place Commit first (which stops the
+// service before writing). A running dnscrypt-proxy often makes a naive
+// writable probe fail even when the directory ACL does not need admin; jumping
+// straight to UAC/pending in that case was wrong. Only elevate or queue pending
+// after Commit fails with a detectable privilege / sharing error.
 func TryCommit(ctx context.Context, env ApplyEnv, staging, pendingDir string, writable bool, elevate func(context.Context, string) error) (ApplyResult, error) {
+	_ = writable // retained for callers / UI; no longer gates elevation.
 	if err := checkStaging(ctx, env, staging); err != nil {
 		return ApplyResult{}, err
 	}
-	if !writable && elevate != nil {
-		if err := elevate(ctx, staging); err != nil {
-			if IsPrivilegeError(err) {
-				return queuePending(staging, pendingDir, env.InstallDir, err)
+	res, err := Commit(ctx, env, staging)
+	if err == nil {
+		_ = ClearPending(pendingDir)
+		return res, nil
+	}
+	if !IsPrivilegeError(err) {
+		return res, err
+	}
+	if elevate != nil {
+		if eerr := elevate(ctx, staging); eerr != nil {
+			if IsPrivilegeError(eerr) {
+				return queuePending(staging, pendingDir, env.InstallDir, eerr)
 			}
-			return ApplyResult{}, err
+			return ApplyResult{}, eerr
 		}
 		_ = ClearPending(pendingDir)
 		return ApplyResult{
@@ -215,15 +242,23 @@ func TryCommit(ctx context.Context, env ApplyEnv, staging, pendingDir string, wr
 			Applied:  true,
 		}, nil
 	}
-	res, err := Commit(ctx, env, staging)
-	if err != nil {
-		if IsPrivilegeError(err) {
-			return queuePending(staging, pendingDir, env.InstallDir, err)
-		}
-		return res, err
+	return queuePending(staging, pendingDir, env.InstallDir, err)
+}
+
+// retryAfterStop tries StopService once when a write fails because the live
+// toml is locked by the running proxy (common when manage_service is off).
+func retryAfterStop(ctx context.Context, env ApplyEnv, first error, fn func() error) error {
+	if first == nil {
+		return nil
 	}
-	_ = ClearPending(pendingDir)
-	return res, nil
+	if !IsPrivilegeError(first) || env.StopService == nil || strings.TrimSpace(env.BinaryPath) == "" {
+		return first
+	}
+	_ = env.StopService(ctx, env.BinaryPath)
+	if err := fn(); err != nil {
+		return first
+	}
+	return nil
 }
 
 func checkStaging(ctx context.Context, env ApplyEnv, staging string) error {
@@ -252,9 +287,9 @@ func queuePending(staging, pendingDir, installDir string, cause error) (ApplyRes
 
 func pendingOfferMessage(installDir, pendingDir string) string {
 	if runtime.GOOS == "windows" {
-		return fmt.Sprintf("Could not write %s (administrator permission needed). Settings are queued in %s. Right-click the tray icon and choose Apply pending settings, or download the zip from this page.", installDir, pendingDir)
+		return fmt.Sprintf("Could not write %s (access denied or the file is in use by dnscrypt-proxy). Settings are queued in %s. Right-click the tray icon and choose Apply pending settings (may prompt for Administrator), or download the zip from this page.", installDir, pendingDir)
 	}
-	return fmt.Sprintf("Could not write %s (root permission needed). Settings are queued in %s. Apply from the tray, or run: sudo dnscrypt-proxy-updater -apply-pending — or download the zip from this page.", installDir, pendingDir)
+	return fmt.Sprintf("Could not write %s (permission denied or file in use). Settings are queued in %s. Apply from the tray, or run: sudo dnscrypt-proxy-updater -apply-pending — or download the zip from this page.", installDir, pendingDir)
 }
 
 func commitName(name string) bool {

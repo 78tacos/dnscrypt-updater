@@ -313,7 +313,15 @@
 
   function bindFields(root) {
     root.querySelectorAll("[data-en]").forEach((el) =>
-      el.addEventListener("change", () => setEdit(el.dataset.en, { present: el.checked }))
+      el.addEventListener("change", () => {
+        const path = el.dataset.en;
+        const cur = currentOf(path);
+        const f = fieldMap().get(path);
+        let value = cur.value;
+        if (value == null && f && f.default != null) value = f.default;
+        if (value == null && f && f.type === "bool") value = true;
+        setEdit(path, { present: el.checked, value });
+      })
     );
     root.querySelectorAll("[data-bool]").forEach((el) =>
       el.addEventListener("change", () => setEdit(el.dataset.bool, { present: true, value: el.checked }))
@@ -399,7 +407,12 @@
     $("save").disabled = true;
     const patches = [];
     edits.forEach((v, path) => {
-      patches.push({ path, enabled: !!v.present, value: v.value });
+      const f = fieldMap().get(path);
+      let value = v.value;
+      if (value === undefined) value = null;
+      if (value == null && f && f.default != null) value = f.default;
+      if (value == null && f && f.type === "bool") value = true;
+      patches.push({ path, enabled: !!v.present, value });
     });
     const files = [];
     fileEdits.forEach((content, name) => files.push({ name, content }));

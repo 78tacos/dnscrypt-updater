@@ -292,7 +292,11 @@ func (s *Server) apply(ctx context.Context, req proxyconf.ApplyRequest) (proxyco
 	}
 	writable := s.canWrite(toml)
 	var elevate func(context.Context, string) error
-	if !writable && s.opts.NeedsElevation != nil && s.opts.NeedsElevation() && s.opts.Elevate != nil {
+	// Offer elevation whenever Windows UAC is available. TryCommit attempts an
+	// in-place write first (after stopping the service); elevate is only used if
+	// that fails with a privilege / sharing error. Do not gate this on CanWrite:
+	// a running dnscrypt-proxy often makes the probe fail even in a user-writable dir.
+	if s.opts.NeedsElevation != nil && s.opts.NeedsElevation() && s.opts.Elevate != nil {
 		elevate = s.opts.Elevate
 	}
 	res, err := proxyconf.TryCommit(ctx, env, staging, s.pendingDir(), writable, elevate)

@@ -52,6 +52,9 @@ func IsPrivilegeError(err error) bool {
 		"administrator permission was declined",
 		"automatic elevation is only supported",
 		"the requested operation requires elevation",
+		"being used by another process",
+		"sharing violation",
+		"cannot access the file because it is being used",
 	}
 	for _, n := range needles {
 		if strings.Contains(msg, n) {

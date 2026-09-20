@@ -185,16 +185,24 @@ func TestApplyQueuesPendingOnElevationDecline(t *testing.T) {
 	if err := os.WriteFile(bin, []byte("ok"), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.Chmod(dir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
 	pending := filepath.Join(t.TempDir(), "pending")
 	var pendingCalls int
+	var elevated int
 	srv, err := New(Options{
 		Locate:         func() (string, string, bool) { return dir, bin, false },
 		Check:          func(context.Context, string, string) error { return nil },
 		CanWrite:       func(string) bool { return false },
 		NeedsElevation: func() bool { return true },
-		Elevate:        func(context.Context, string) error { return os.ErrPermission },
-		PendingDir:     func() string { return pending },
-		OnPending:      func(proxyconf.PendingStatus) { pendingCalls++ },
+		Elevate: func(context.Context, string) error {
+			elevated++
+			return os.ErrPermission
+		},
+		PendingDir: func() string { return pending },
+		OnPending:  func(proxyconf.PendingStatus) { pendingCalls++ },
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -228,6 +236,9 @@ func TestApplyQueuesPendingOnElevationDecline(t *testing.T) {
 	}
 	if pendingCalls != 1 {
 		t.Fatalf("OnPending calls %d", pendingCalls)
+	}
+	if elevated != 1 {
+		t.Fatalf("elevate calls %d (commit-first should still try elevate after write fails)", elevated)
 	}
 	live, err := os.ReadFile(toml)
 	if err != nil {

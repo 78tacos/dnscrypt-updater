@@ -25,6 +25,9 @@ func TestIsPrivilegeError(t *testing.T) {
 	if !IsPrivilegeError(fmtErr("dnscrypt-proxy-updater: administrator permission was declined")) {
 		t.Fatal("declined")
 	}
+	if !IsPrivilegeError(fmtErr(`write dnscrypt-proxy.toml: open C:\Program Files\dnscrypt-proxy\dnscrypt-proxy.toml: The process cannot access the file because it is being used by another process.`)) {
+		t.Fatal("sharing violation")
+	}
 	if IsPrivilegeError(fmtErr("dnscrypt-proxy -check: bad key")) {
 		t.Fatal("check errors are not privilege errors")
 	}
@@ -84,10 +87,19 @@ func TestTryCommitPrivilegeQueuesPending(t *testing.T) {
 	install := t.TempDir()
 	staging := t.TempDir()
 	pending := filepath.Join(t.TempDir(), "pending")
+	live := filepath.Join(install, "dnscrypt-proxy.toml")
+	if err := os.WriteFile(live, []byte("cache = false\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(install, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(install, 0o755) })
 	if err := os.WriteFile(filepath.Join(staging, "dnscrypt-proxy.toml"), []byte("cache = true\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	checked := false
+	elevated := false
 	res, err := TryCommit(context.Background(), ApplyEnv{
 		InstallDir: install,
 		BinaryPath: "dnscrypt-proxy",
@@ -96,19 +108,47 @@ func TestTryCommitPrivilegeQueuesPending(t *testing.T) {
 			return nil
 		},
 	}, staging, pending, false, func(context.Context, string) error {
+		elevated = true
 		return os.ErrPermission
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !checked {
-		t.Fatal("expected -check before fallback")
+	if !checked || !elevated {
+		t.Fatalf("checked=%v elevated=%v", checked, elevated)
 	}
 	if !res.Pending || res.Applied || res.PendingDir != pending {
 		t.Fatalf("%+v", res)
 	}
 	if !ReadPending(pending).Present {
 		t.Fatal("expected queued files")
+	}
+}
+
+func TestTryCommitIgnoresWritableProbeWhenCommitWorks(t *testing.T) {
+	t.Parallel()
+	install := t.TempDir()
+	staging := t.TempDir()
+	pending := filepath.Join(t.TempDir(), "pending")
+	if err := os.WriteFile(filepath.Join(install, "dnscrypt-proxy.toml"), []byte("cache = false\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(staging, "dnscrypt-proxy.toml"), []byte("cache = true\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	elevated := false
+	res, err := TryCommit(context.Background(), ApplyEnv{InstallDir: install}, staging, pending, false, func(context.Context, string) error {
+		elevated = true
+		return os.ErrPermission
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if elevated {
+		t.Fatal("must not elevate when in-place commit works")
+	}
+	if !res.Applied || res.Pending {
+		t.Fatalf("%+v", res)
 	}
 }
 
