@@ -65,3 +65,28 @@ func TestPQDNSCryptEnable(t *testing.T) {
 		t.Fatal("example pqdnscrypt should start commented")
 	}
 }
+
+func TestPQDNSCryptInsertWhenAbsent(t *testing.T) {
+	t.Parallel()
+	cat, err := LoadCatalog()
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := "listen_addresses = ['127.0.0.1:53']\ncache = true\n\n[query_log]\nfile = 'query.log'\n"
+	out, err := ApplyPatches(src, []Patch{{Path: "pqdnscrypt", Enabled: true, Value: mustJSON(true)}}, cat)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "pqdnscrypt = true") {
+		t.Fatalf("missing insert:\n%s", out)
+	}
+	if strings.Contains(out, "# pqdnscrypt") {
+		t.Fatal("commented")
+	}
+	// must stay in root section, before [query_log]
+	idxPQ := strings.Index(out, "pqdnscrypt = true")
+	idxQL := strings.Index(out, "[query_log]")
+	if idxPQ < 0 || idxQL < 0 || idxPQ > idxQL {
+		t.Fatalf("bad placement pq=%d ql=%d\n%s", idxPQ, idxQL, out)
+	}
+}

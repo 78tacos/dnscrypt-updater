@@ -21,8 +21,8 @@ func relaunchElevatedAndWait(args []string) (int, error) {
 	if err != nil {
 		return 1, err
 	}
-	script := "$p = Start-Process -FilePath " + psQuote(exe) +
-		" -ArgumentList " + psArgList(args) +
+	script := "$p = Start-Process -FilePath " + powershellSingleQuote(exe) +
+		" -ArgumentList " + powershellArgumentList(args) +
 		" -Verb RunAs -Wait -PassThru -WindowStyle Hidden; if ($null -eq $p) { exit 1 }; exit $p.ExitCode"
 	cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", script)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
@@ -47,16 +47,4 @@ func relaunchElevatedAndWait(args []string) (int, error) {
 		return 1, ErrElevationCancelled
 	}
 	return 1, err
-}
-
-func psQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
-}
-
-func psArgList(args []string) string {
-	parts := make([]string, len(args))
-	for i, a := range args {
-		parts[i] = psQuote(a)
-	}
-	return "@(" + strings.Join(parts, ",") + ")"
 }

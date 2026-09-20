@@ -116,13 +116,23 @@ func (rt *Runtime) checkProxyConfig(ctx context.Context, bin, configPath string)
 }
 
 func (rt *Runtime) elevateApply(staging string) error {
-	dir, _ := rt.proxyPaths()
+	dir, bin := rt.proxyPaths()
 	proxyconf.ClearApplyError(staging)
+	if err := proxyconf.WriteApplyMeta(staging, proxyconf.ApplyMeta{
+		InstallDir: dir,
+		BinaryPath: bin,
+	}); err != nil {
+		return fmt.Errorf("write apply meta: %w", err)
+	}
 	// -quiet keeps the UAC child from flashing a console; failure text is written
-	// to staging/.apply-error.txt for the parent to read.
+	// to staging/.apply-error.txt for the parent to read. Install/binary paths are
+	// also in .apply-meta.json so spaced Program Files paths survive elevation.
 	args := []string{"-apply-config", "-quiet", "-config", rt.Paths.File, "-staging", staging}
 	if dir != "" {
 		args = append(args, "-install-dir", dir)
+	}
+	if bin != "" {
+		args = append(args, "-binary-path", bin)
 	}
 	rt.Log.Info("requesting administrator permission to save dnscrypt-proxy settings")
 	code, err := rt.applier().RelaunchElevated(args)
@@ -149,6 +159,13 @@ func (rt *Runtime) ApplyStaged(ctx context.Context, staging string) (proxyconf.A
 		return proxyconf.ApplyResult{}, fmt.Errorf("-staging is required with -apply-config")
 	}
 	dir, bin := rt.proxyPaths()
+	meta := proxyconf.ReadApplyMeta(staging)
+	if d := strings.TrimSpace(meta.InstallDir); d != "" {
+		dir = d
+	}
+	if b := strings.TrimSpace(meta.BinaryPath); b != "" {
+		bin = b
+	}
 	rt.mu.Lock()
 	manage := rt.cfg.ManageService && !rt.Opts.NoService
 	rt.mu.Unlock()

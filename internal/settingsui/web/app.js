@@ -286,6 +286,12 @@
     const related = f.related_file
       ? '<p class="muted">List file: <code>' + esc(f.related_file) + "</code></p>"
       : "";
+    const absent =
+      !enabled && !(state.current && state.current[f.path])
+        ? '<p class="muted">Not in your dnscrypt-proxy.toml yet — enable it and Save to insert this key.</p>'
+        : !enabled && state.current && state.current[f.path] && state.current[f.path].commented
+          ? '<p class="muted">Currently commented out in your toml — enable it and Save to activate it.</p>'
+          : "";
     return (
       '<article class="field' +
       dirty +
@@ -303,6 +309,7 @@
       esc(f.help || "") +
       "</p>" +
       related +
+      absent +
       '<div class="row">' +
       widget +
       "</div><div class='chips row'>" +

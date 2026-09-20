@@ -82,6 +82,9 @@ func runConfigCheck(ctx context.Context, bin, configPath string) error {
 		ctx, cancel = context.WithTimeout(ctx, 45*time.Second)
 		defer cancel()
 	}
+	if strings.TrimSpace(bin) == "" {
+		return fmt.Errorf("dnscrypt-proxy -check: binary path is empty")
+	}
 	cmd := exec.CommandContext(ctx, bin, "-config", configPath, "-check")
 	cmd.Dir = filepath.Dir(configPath)
 	out, err := cmd.CombinedOutput()
@@ -90,7 +93,7 @@ func runConfigCheck(ctx context.Context, bin, configPath string) error {
 		if msg == "" {
 			msg = err.Error()
 		}
-		return fmt.Errorf("dnscrypt-proxy -check: %s", msg)
+		return fmt.Errorf("dnscrypt-proxy -check (%s): %s", bin, msg)
 	}
 	return nil
 }
