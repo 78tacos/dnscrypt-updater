@@ -52,7 +52,7 @@ func (rt *Runtime) settingsOpts() settingsui.Options {
 		Elevate: func(ctx context.Context, staging string) error {
 			return rt.elevateApply(staging)
 		},
-		Check:        apply.CheckConfig,
+		Check:        rt.checkProxyConfig,
 		StopService:  ap.StopService,
 		StartService: ap.StartService,
 		PendingDir:   func() string { return rt.Paths.Pending },
@@ -107,6 +107,13 @@ func (rt *Runtime) RunSettingsUI(ctx context.Context) error {
 	return nil
 }
 
+func (rt *Runtime) checkProxyConfig(ctx context.Context, bin, configPath string) error {
+	if rt.Applier != nil && rt.Applier.RunCheck != nil {
+		return rt.Applier.RunCheck(ctx, bin, configPath)
+	}
+	return apply.CheckConfig(ctx, bin, configPath)
+}
+
 func (rt *Runtime) elevateApply(staging string) error {
 	dir, _ := rt.proxyPaths()
 	args := []string{"-apply-config", "-quiet", "-config", rt.Paths.File, "-staging", staging}
@@ -138,7 +145,7 @@ func (rt *Runtime) ApplyStaged(ctx context.Context, staging string) (proxyconf.A
 		InstallDir:    dir,
 		BinaryPath:    bin,
 		ManageService: manage,
-		Check:         apply.CheckConfig,
+		Check:         rt.checkProxyConfig,
 		StopService:   ap.StopService,
 		StartService:  ap.StartService,
 	}, staging)

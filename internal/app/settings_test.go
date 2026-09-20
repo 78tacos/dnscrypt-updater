@@ -56,10 +56,6 @@ func TestApplyPendingWritesInstallDir(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(install, "dnscrypt-proxy.toml"), []byte("cache = false\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	bin := filepath.Join(install, apply.ProxyBinaryName(runtime.GOOS))
-	if err := os.WriteFile(bin, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
 	staging := t.TempDir()
 	if err := os.WriteFile(filepath.Join(staging, "dnscrypt-proxy.toml"), []byte("cache = true\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -68,12 +64,13 @@ func TestApplyPendingWritesInstallDir(t *testing.T) {
 		t.Fatal(err)
 	}
 	rt := &Runtime{
-		Opts:  Options{InstallDir: install, BinaryPath: bin, NoService: true},
+		Opts:  Options{InstallDir: install, BinaryPath: filepath.Join(install, apply.ProxyBinaryName(runtime.GOOS)), NoService: true},
 		Paths: config.Paths{Pending: pending},
 		cfg:   config.File{ManageService: false},
 		Log:   slog.New(slog.NewTextHandler(io.Discard, nil)),
 		Applier: &apply.Applier{
 			Elevated: func() bool { return true },
+			RunCheck: func(context.Context, string, string) error { return nil },
 		},
 	}
 	res, err := rt.ApplyPending(context.Background())

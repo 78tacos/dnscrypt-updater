@@ -1,6 +1,10 @@
 package proxyconf
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"os"
 	"strings"
 	"testing"
 )
@@ -77,6 +81,20 @@ func TestLoadCatalog(t *testing.T) {
 	}
 	if len(cat.Fields) < 80 {
 		t.Fatalf("too few fields: %d", len(cat.Fields))
+	}
+}
+
+func TestExampleSHAIgnoresCRLF(t *testing.T) {
+	t.Parallel()
+	b, err := os.ReadFile("upstream/example-dnscrypt-proxy.toml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	crlf := bytes.ReplaceAll(bytes.ReplaceAll(b, []byte("\r\n"), []byte("\n")), []byte("\n"), []byte("\r\n"))
+	norm := bytes.ReplaceAll(crlf, []byte("\r\n"), []byte("\n"))
+	sum := sha256.Sum256(norm)
+	if got := hex.EncodeToString(sum[:]); got != GeneratedExampleSHA256 {
+		t.Fatalf("normalized sha %s want %s", got, GeneratedExampleSHA256)
 	}
 }
 

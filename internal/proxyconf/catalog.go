@@ -1,6 +1,7 @@
 package proxyconf
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"embed"
 	"encoding/hex"
@@ -34,6 +35,7 @@ func parseVendored() (Catalog, error) {
 	if err != nil {
 		return Catalog{}, err
 	}
+	tomlBytes = bytes.ReplaceAll(tomlBytes, []byte("\r\n"), []byte("\n"))
 	goBytes, err := upstreamFS.ReadFile("upstream/config.go.txt")
 	if err != nil {
 		return Catalog{}, err

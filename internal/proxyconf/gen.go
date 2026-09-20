@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -22,6 +23,7 @@ func main() {
 	if err != nil {
 		fatal(err)
 	}
+	b = bytes.ReplaceAll(b, []byte("\r\n"), []byte("\n"))
 	tag, err := os.ReadFile(verPath)
 	if err != nil {
 		fatal(err)
