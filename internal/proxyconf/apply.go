@@ -26,6 +26,10 @@ type ApplyEnv struct {
 	Check         func(ctx context.Context, bin, configPath string) error
 	StopService   func(ctx context.Context, bin string) error
 	StartService  func(ctx context.Context, bin string) error
+	// WriteErr, if set, is returned after -check / service stop instead of
+	// writing files. Tests use this to simulate access-denied without relying
+	// on OS-specific read-only directories (Windows chmod is a no-op for owners).
+	WriteErr error
 }
 
 // ApplyResult is the outcome of a commit or a queued pending bundle.
@@ -154,6 +158,9 @@ func Commit(ctx context.Context, env ApplyEnv, staging string) (ApplyResult, err
 			// A hard privilege failure here is handled when the write fails.
 			_ = err
 		}
+	}
+	if env.WriteErr != nil {
+		return out, env.WriteErr
 	}
 	for _, e := range entries {
 		if e.IsDir() {

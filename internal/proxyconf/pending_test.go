@@ -87,14 +87,9 @@ func TestTryCommitPrivilegeQueuesPending(t *testing.T) {
 	install := t.TempDir()
 	staging := t.TempDir()
 	pending := filepath.Join(t.TempDir(), "pending")
-	live := filepath.Join(install, "dnscrypt-proxy.toml")
-	if err := os.WriteFile(live, []byte("cache = false\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(install, "dnscrypt-proxy.toml"), []byte("cache = false\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Chmod(install, 0o555); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chmod(install, 0o755) })
 	if err := os.WriteFile(filepath.Join(staging, "dnscrypt-proxy.toml"), []byte("cache = true\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -107,6 +102,7 @@ func TestTryCommitPrivilegeQueuesPending(t *testing.T) {
 			checked = true
 			return nil
 		},
+		WriteErr: os.ErrPermission,
 	}, staging, pending, false, func(context.Context, string) error {
 		elevated = true
 		return os.ErrPermission
@@ -122,6 +118,10 @@ func TestTryCommitPrivilegeQueuesPending(t *testing.T) {
 	}
 	if !ReadPending(pending).Present {
 		t.Fatal("expected queued files")
+	}
+	got, _ := os.ReadFile(filepath.Join(install, "dnscrypt-proxy.toml"))
+	if string(got) != "cache = false\n" {
+		t.Fatalf("live file should be unchanged: %q", got)
 	}
 }
 

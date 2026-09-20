@@ -36,6 +36,8 @@ type Options struct {
 	PendingDir     func() string
 	CanWrite       func(path string) bool
 	OnPending      func(proxyconf.PendingStatus)
+	// ForceWriteErr is forwarded to proxyconf.ApplyEnv.WriteErr (tests).
+	ForceWriteErr error
 }
 
 // Server is a 127.0.0.1 HTTP UI.
@@ -289,6 +291,7 @@ func (s *Server) apply(ctx context.Context, req proxyconf.ApplyRequest) (proxyco
 		Check:         s.opts.Check,
 		StopService:   s.opts.StopService,
 		StartService:  s.opts.StartService,
+		WriteErr:      s.opts.ForceWriteErr,
 	}
 	writable := s.canWrite(toml)
 	var elevate func(context.Context, string) error

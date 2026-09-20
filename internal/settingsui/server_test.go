@@ -185,10 +185,6 @@ func TestApplyQueuesPendingOnElevationDecline(t *testing.T) {
 	if err := os.WriteFile(bin, []byte("ok"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Chmod(dir, 0o555); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
 	pending := filepath.Join(t.TempDir(), "pending")
 	var pendingCalls int
 	var elevated int
@@ -201,8 +197,9 @@ func TestApplyQueuesPendingOnElevationDecline(t *testing.T) {
 			elevated++
 			return os.ErrPermission
 		},
-		PendingDir: func() string { return pending },
-		OnPending:  func(proxyconf.PendingStatus) { pendingCalls++ },
+		PendingDir:    func() string { return pending },
+		OnPending:     func(proxyconf.PendingStatus) { pendingCalls++ },
+		ForceWriteErr: os.ErrPermission,
 	})
 	if err != nil {
 		t.Fatal(err)
