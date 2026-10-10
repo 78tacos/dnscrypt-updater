@@ -287,6 +287,5 @@ func fileExists(path string) bool {
 	if err != nil || st.IsDir() {
 		return false
 	}
-	// Do not inspect Windows PE FileVersion. Existence + CLI is enough.
 	return true
 }

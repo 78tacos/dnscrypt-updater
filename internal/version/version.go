@@ -1,8 +1,5 @@
 // Package version compares dnscrypt-proxy release tags and CLI version strings.
-//
-// Tags and CLI output typically look like "2.1.18" or "v2.1.18". Comparison
-// follows a practical SemVer subset: optional v prefix, numeric core
-// identifiers, optional pre-release, ignored build metadata.
+// A leading v is optional. Numeric core and pre-release are compared; build metadata is ignored.
 package version
 
 import (
