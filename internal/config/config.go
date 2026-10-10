@@ -178,7 +178,7 @@ func (f File) Skips(remoteTag string) bool {
 	if skip == "" || remoteTag == "" {
 		return false
 	}
-	// Compare normalized tags when both parse; otherwise exact/trim match.
+	// Ignore a leading v/V and compare case-insensitively.
 	return strings.EqualFold(strings.TrimPrefix(strings.TrimPrefix(skip, "v"), "V"), strings.TrimPrefix(strings.TrimPrefix(strings.TrimSpace(remoteTag), "v"), "V"))
 }
 

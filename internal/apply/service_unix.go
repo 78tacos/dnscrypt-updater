@@ -23,7 +23,7 @@ func (s nativeService) Query(ctx context.Context) (ServiceStatus, error) {
 	case "inactive", "failed":
 		st.Installed = true
 	default:
-		// try -service query via binary later; treat as not installed
+		// systemctl did not report a known state; treat the service as not installed
 	}
 	return st, nil
 }

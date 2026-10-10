@@ -1,14 +1,10 @@
 # dnscrypt-proxy-updater
 
-Tray companion that watches official [dnscrypt-proxy](https://github.com/DNSCrypt/dnscrypt-proxy) releases, **downloads the minisign-signed archive**, and can **install it for the system**.
+Tray app for [dnscrypt-proxy](https://github.com/DNSCrypt/dnscrypt-proxy). It watches upstream releases, downloads the minisign-signed archive, and can install it.
 
-This is an original MIT-licensed companion. It is **not** SimpleDnsCrypt. It only installs binaries published by [`DNSCrypt/dnscrypt-proxy`](https://github.com/DNSCrypt/dnscrypt-proxy). Captain’s fork [`78tacos/dnscrypt-proxy`](https://github.com/78tacos/dnscrypt-proxy) is **not** watched.
+This is not SimpleDnsCrypt. Installs come only from [`DNSCrypt/dnscrypt-proxy`](https://github.com/DNSCrypt/dnscrypt-proxy), using `https://api.github.com/repos/DNSCrypt/dnscrypt-proxy/releases/latest`. The fork at [`78tacos/dnscrypt-proxy`](https://github.com/78tacos/dnscrypt-proxy) is not followed.
 
-**Release source (hardcoded):**
-
-`GET https://api.github.com/repos/DNSCrypt/dnscrypt-proxy/releases/latest`
-
-[dnscrypt.org](https://www.dnscrypt.org/) warns against unofficial/torrent “DNSCrypt client” downloads. Prefer GitHub (or package managers that track it).
+[dnscrypt.org](https://www.dnscrypt.org/) warns against unofficial client downloads. Use the GitHub releases, or a package manager that tracks them.
 
 ---
 
@@ -22,9 +18,9 @@ dnscrypt-proxy-updater -install
 
 On Windows this:
 
-1. Downloads the official `dnscrypt-proxy-win64-*.zip` (or `winarm`) **and** the matching `.minisig`.
-2. Verifies the archive with minisign and pubkey `RWTk1xXqcTODeYttYMCMLo0YJHaFEHn7a3akqHlb/7QvIQXHVPxKbjB5` (also DNSSEC TXT `dnscrypt-proxy.key.dnscrypt.info`).
-3. Installs to `%ProgramFiles%\dnscrypt-proxy` (or your existing install dir). The live `dnscrypt-proxy.toml` is never overwritten; a first install copies `example-dnscrypt-proxy.toml`. The previous exe is kept as `dnscrypt-proxy.exe.old`.
+1. Downloads `dnscrypt-proxy-win64-*.zip` (or `winarm`) and the matching `.minisig`.
+2. Checks the archive with minisign. Public key: `RWTk1xXqcTODeYttYMCMLo0YJHaFEHn7a3akqHlb/7QvIQXHVPxKbjB5` (also the DNSSEC TXT `dnscrypt-proxy.key.dnscrypt.info`).
+3. Installs under `%ProgramFiles%\dnscrypt-proxy`, or the existing install directory. An existing `dnscrypt-proxy.toml` is left alone; a first install copies `example-dnscrypt-proxy.toml`. The previous exe is kept as `dnscrypt-proxy.exe.old`.
 4. Registers and starts the official `dnscrypt-proxy -service` (needs Administrator; the tray prompts UAC).
 5. Points connected adapters with a default gateway at `127.0.0.1` so the OS uses the local proxy (wiki step 3). Pass `-no-dns` to skip.
 
@@ -38,11 +34,11 @@ Linux/macOS: files go to `/opt/dnscrypt-proxy` (needs root). Automatic DNS chang
 
 | OS | Tray app | Headless `-check-once` / `-install` | Notes |
 | --- | --- | --- | --- |
-| **Windows** (primary) | Yes (no CGO) | Yes | Build with `-H=windowsgui` to hide the console. Notifications via Windows toasts. |
-| Linux | Nice-to-have | Yes (default build) | Tray needs CGO plus GTK3 / AppIndicator headers and `-tags systray`. Untagged Linux builds fall back to a one-shot check. |
-| macOS | Nice-to-have | Yes | Tray needs CGO and a proper `.app` bundle for a reliable menu-bar extra. Untagged builds fall back to a one-shot check. |
+| Windows (primary) | Yes (no CGO) | Yes | Build with `-H=windowsgui` to hide the console. Notifications use Windows toasts. |
+| Linux | Optional | Yes (default build) | Tray needs CGO, GTK3 / AppIndicator headers, and `-tags systray`. Without those, the binary runs one check and exits. |
+| macOS | Optional | Yes | Tray needs CGO and a `.app` bundle for a reliable menu-bar extra. Without that, the binary runs one check and exits. |
 
-Version detection tries `dnscrypt-proxy -version` then `--version`. It does **not** trust Windows PE `FileVersion`, which is often empty ([dnscrypt-proxy#2381](https://github.com/DNSCrypt/dnscrypt-proxy/issues/2381)).
+Version detection runs `dnscrypt-proxy -version`, then `--version`. Windows PE `FileVersion` is ignored; it is often empty ([dnscrypt-proxy#2381](https://github.com/DNSCrypt/dnscrypt-proxy/issues/2381)).
 
 ---
 
@@ -131,7 +127,7 @@ CLI: `-install`, `-no-dns`, `-no-service`, `-install-dir`, `-current-version`, `
 **Windows**
 
 - Release builds use `-H=windowsgui` so there is no console.
-- Start with Windows: copy a shortcut to `shell:startup`, or a Task Scheduler task (“At log on”, hidden, action = `dnscrypt-proxy-updater.exe`).
+- Start with Windows: copy a shortcut to `shell:startup`, or a Task Scheduler task ("At log on", hidden, action = `dnscrypt-proxy-updater.exe`).
 - Installing the proxy as a service still requires Administrator (UAC).
 
 **Linux**
@@ -146,14 +142,9 @@ CLI: `-install`, `-no-dns`, `-no-service`, `-install-dir`, `-current-version`, `
 
 ## How version detection works
 
-1. If `current_version` / `-current-version` is set, that value is compared to GitHub `tag_name` (optional `v` prefix is ignored).
-2. Otherwise locate `dnscrypt-proxy`:
-   - configured `binary_path`
-   - `PATH`
-   - common dirs (`/opt/dnscrypt-proxy/` on Linux as in the wiki updater, Program Files / Scoop / Chocolatey on Windows, Homebrew paths on macOS)
-   - Windows `sc qc dnscrypt-proxy` `BINARY_PATH_NAME`, or Linux `systemctl show -p ExecStart`
-3. Run `dnscrypt-proxy -version`, then `--version`. Parse stdout. **PE FileVersion is not used.**
-4. Distro packages may lag GitHub. The tray shows the **local binary CLI version** vs **GitHub `tag_name`**. If the current binary is a Scoop/Chocolatey/apt path, `-install` writes a separate copy under Program Files / `/opt` instead of replacing the package.
+If `current_version` or `-current-version` is set, that string is compared with the GitHub `tag_name` (a leading `v` is ignored). Otherwise the app looks up `dnscrypt-proxy` from `binary_path`, `PATH`, and the usual install locations: `/opt/dnscrypt-proxy/` (the path in the upstream wiki updater), Program Files, Scoop, and Chocolatey on Windows, and Homebrew on macOS. On Windows it also reads `BINARY_PATH_NAME` from `sc qc dnscrypt-proxy`; on Linux it reads `systemctl show -p ExecStart`.
+
+The version comes from `dnscrypt-proxy -version`, then `--version`. Windows PE `FileVersion` is ignored. The tray shows that CLI version next to the GitHub tag. If the binary sits on a package-manager path (Scoop, Chocolatey, apt, and similar), `-install` leaves it alone and writes a separate copy under Program Files or `/opt`.
 
 ---
 
