@@ -405,7 +405,7 @@ func TestSummarize(t *testing.T) {
 		ServiceStarted: true,
 		DNSUpdated:     true,
 	})
-	for _, want := range []string{"Installed", "2.1.18", "minisign OK", "service running", "127.0.0.1"} {
+	for _, want := range []string{"Installed", "2.1.18", "minisign OK", "service running", "127.0.0.1", "::1"} {
 		if !strings.Contains(s, want) {
 			t.Fatalf("missing %q in %q", want, s)
 		}

@@ -305,14 +305,14 @@ func (rt *Runtime) Install(ctx context.Context) (apply.Result, error) {
 	opts := apply.Options{
 		InstallDir:     firstNonEmpty(rt.Opts.InstallDir, cfg.InstallDir),
 		ExistingBinary: firstNonEmpty(rt.Opts.BinaryPath, existing),
-		SetSystemDNS:   cfg.SetSystemDNS && !rt.Opts.NoDNS,
+		SetSystemDNS:   installSetsSystemDNS(cfg, rt.Opts.NoDNS),
 		ManageService:  cfg.ManageService && !rt.Opts.NoService,
 	}
 
 	ap := rt.applier()
 	if ap.NeedsWindowsElevation() {
 		args := []string{"-install", "-quiet", "-config", rt.Paths.File}
-		if rt.Opts.NoDNS || !cfg.SetSystemDNS {
+		if !installSetsSystemDNS(cfg, rt.Opts.NoDNS) {
 			args = append(args, "-no-dns")
 		}
 		if rt.Opts.NoService || !cfg.ManageService {
@@ -371,6 +371,12 @@ func (rt *Runtime) Install(ctx context.Context) (apply.Result, error) {
 		rt.Log.Warn("post-install check", "err", perr)
 	}
 	return res, nil
+}
+
+// installSetsSystemDNS reports whether this install should point adapters at the local proxy.
+// A nil or true set_system_dns stays on. Explicit false, -no-dns, and -no-system-dns turn it off.
+func installSetsSystemDNS(cfg config.File, noDNS bool) bool {
+	return cfg.SystemDNSEnabled() && !noDNS
 }
 
 func firstNonEmpty(vals ...string) string {

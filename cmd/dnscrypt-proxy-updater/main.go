@@ -32,6 +32,7 @@ func run(args []string) int {
 	noNotify := fs.Bool("no-notify", false, "disable desktop notifications")
 	doInstall := fs.Bool("install", false, "download the official signed archive, verify minisign, and install dnscrypt-proxy for this system")
 	noDNS := fs.Bool("no-dns", false, "with -install, do not change system DNS")
+	noSystemDNS := fs.Bool("no-system-dns", false, "with -install, do not change system DNS (same as -no-dns)")
 	noService := fs.Bool("no-service", false, "with -install, copy files only (do not install/start the service)")
 	installDir := fs.String("install-dir", "", "with -install, destination directory")
 
@@ -66,7 +67,7 @@ func run(args []string) int {
 		ForceNotify:    *doNotify,
 		NoNotify:       *noNotify,
 		Install:        *doInstall,
-		NoDNS:          *noDNS,
+		NoDNS:          *noDNS || *noSystemDNS,
 		NoService:      *noService,
 		InstallDir:     *installDir,
 	}, log)

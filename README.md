@@ -22,7 +22,7 @@ On Windows this:
 2. Checks the archive with minisign. Public key: `RWTk1xXqcTODeYttYMCMLo0YJHaFEHn7a3akqHlb/7QvIQXHVPxKbjB5` (also the DNSSEC TXT `dnscrypt-proxy.key.dnscrypt.info`).
 3. Installs under `%ProgramFiles%\dnscrypt-proxy`, or the existing install directory. An existing `dnscrypt-proxy.toml` is left alone; a first install copies `example-dnscrypt-proxy.toml`. The previous exe is kept as `dnscrypt-proxy.exe.old`.
 4. Registers and starts the official `dnscrypt-proxy -service` (needs Administrator; the tray prompts UAC).
-5. Points connected adapters with a default gateway at `127.0.0.1` so the OS uses the local proxy (wiki step 3). Pass `-no-dns` to skip.
+5. Points connected adapters with a default gateway at `127.0.0.1`, and at `::1` when IPv6 is bound (`ms_tcpip6`). Adapters without IPv6 stay on IPv4. This step is on by default. Pass `-no-dns` or `-no-system-dns`, or set `set_system_dns` to `false`, to skip.
 
 It does **not** rewrite your toml, does **not** follow forks, and does **not** auto-install on a background poll. You have to click Install or pass `-install`.
 
@@ -117,10 +117,12 @@ See [`config.example.json`](config.example.json).
 | `snooze_until` | empty | RFC3339 timestamp; suppress notifications until then. |
 | `notify` | `true` | Desktop notifications. Tray status still updates. |
 | `install_dir` | empty | Override install location. Windows default: `%ProgramFiles%\dnscrypt-proxy`. |
-| `set_system_dns` | `true` | After install on Windows, set connected adapters to `127.0.0.1`. |
+| `set_system_dns` | `true` | After install on Windows, set connected adapters to `127.0.0.1` and to `::1` when IPv6 is enabled. Omit the field to keep the default. `false` opts out. |
 | `manage_service` | `true` | Install/start `dnscrypt-proxy -service`. |
 
-CLI: `-install`, `-no-dns`, `-no-service`, `-install-dir`, `-current-version`, `-binary-path`, `-config`, `-no-notify`, `-notify` (with `-check-once`), `-quiet`.
+CLI: `-install`, `-no-dns`, `-no-system-dns` (same as `-no-dns`), `-no-service`, `-install-dir`, `-current-version`, `-binary-path`, `-config`, `-no-notify`, `-notify` (with `-check-once`), `-quiet`.
+
+`set_system_dns` defaults to on, including when the field is left out of `config.json` or is JSON `null`. [`config.example.json`](config.example.json) shows `"set_system_dns": true`. An explicit `false` is kept. `-no-dns` and `-no-system-dns` skip the change for that run even when the config value is true.
 
 ### Quiet / start with the OS
 

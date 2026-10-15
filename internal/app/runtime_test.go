@@ -16,6 +16,32 @@ import (
 	"github.com/78tacos/dnscrypt-updater/internal/version"
 )
 
+func TestInstallSetsSystemDNS(t *testing.T) {
+	t.Parallel()
+	on := true
+	off := false
+	cases := []struct {
+		name  string
+		cfg   config.File
+		noDNS bool
+		want  bool
+	}{
+		{name: "unset defaults on", cfg: config.File{}, want: true},
+		{name: "explicit true", cfg: config.File{SetSystemDNS: &on}, want: true},
+		{name: "explicit false", cfg: config.File{SetSystemDNS: &off}, want: false},
+		{name: "cli opt-out", cfg: config.File{SetSystemDNS: &on}, noDNS: true, want: false},
+		{name: "config false and cli opt-out", cfg: config.File{SetSystemDNS: &off}, noDNS: true, want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := installSetsSystemDNS(tc.cfg, tc.noDNS); got != tc.want {
+				t.Fatalf("got %v want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestCheckOnceJSONUpdateExit(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()

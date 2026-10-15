@@ -8,5 +8,5 @@ import (
 )
 
 func (nativeDNS) SetLoopback(context.Context) error {
-	return fmt.Errorf("automatic system DNS change is only implemented on Windows; set the adapter to 127.0.0.1 manually")
+	return fmt.Errorf("automatic system DNS change is only implemented on Windows; set the adapter to 127.0.0.1 and ::1 manually")
 }
