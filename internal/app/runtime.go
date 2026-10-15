@@ -311,22 +311,15 @@ func (rt *Runtime) Install(ctx context.Context) (apply.Result, error) {
 
 	ap := rt.applier()
 	if ap.NeedsWindowsElevation() {
-		args := []string{"-install", "-quiet", "-config", rt.Paths.File}
-		if !installSetsSystemDNS(cfg, rt.Opts.NoDNS) {
-			args = append(args, "-no-dns")
-		}
-		if rt.Opts.NoService || !cfg.ManageService {
-			args = append(args, "-no-service")
-		}
-		if opts.InstallDir != "" {
-			args = append(args, "-install-dir", opts.InstallDir)
-		}
+		args := elevatedInstallArgs(cfg, rt.Opts, rt.Paths.File)
 		rt.Log.Info("requesting administrator permission to install dnscrypt-proxy")
 		code, err := ap.RelaunchElevated(args)
 		if err != nil {
+			_ = notify.InstallFailed(err)
 			return apply.Result{}, err
 		}
 		if code != 0 {
+			// The elevated process already reported the install error.
 			return apply.Result{}, fmt.Errorf("elevated install exited %d", code)
 		}
 		cfg2, err := config.LoadFile(rt.Paths.File)
@@ -347,6 +340,7 @@ func (rt *Runtime) Install(ctx context.Context) (apply.Result, error) {
 			out.Version = res.LocalVersion
 			out.Message = fmt.Sprintf("Installed dnscrypt-proxy %s at %s.", res.LocalVersion, res.BinaryPath)
 		}
+		out.Elevated = true
 		return out, nil
 	}
 
@@ -377,6 +371,30 @@ func (rt *Runtime) Install(ctx context.Context) (apply.Result, error) {
 // A nil or true set_system_dns stays on. Explicit false, -no-dns, and -no-system-dns turn it off.
 func installSetsSystemDNS(cfg config.File, noDNS bool) bool {
 	return cfg.SystemDNSEnabled() && !noDNS
+}
+
+// elevatedInstallArgs is the command line for the UAC relaunch of this process.
+func elevatedInstallArgs(cfg config.File, opts Options, configPath string) []string {
+	args := []string{"-install", "-quiet", "-config", configPath}
+	if !installSetsSystemDNS(cfg, opts.NoDNS) {
+		args = append(args, "-no-dns")
+	}
+	if opts.NoService || !cfg.ManageService {
+		args = append(args, "-no-service")
+	}
+	if dir := firstNonEmpty(opts.InstallDir, cfg.InstallDir); dir != "" {
+		args = append(args, "-install-dir", dir)
+	}
+	if p := strings.TrimSpace(opts.BinaryPath); p != "" {
+		args = append(args, "-binary-path", p)
+	}
+	if v := strings.TrimSpace(opts.CurrentVersion); v != "" {
+		args = append(args, "-current-version", v)
+	}
+	if opts.NoNotify {
+		args = append(args, "-no-notify")
+	}
+	return args
 }
 
 func firstNonEmpty(vals ...string) string {

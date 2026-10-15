@@ -21,7 +21,7 @@ On Windows this:
 1. Downloads `dnscrypt-proxy-win64-*.zip` (or `winarm`) and the matching `.minisig`.
 2. Checks the archive with minisign. Public key: `RWTk1xXqcTODeYttYMCMLo0YJHaFEHn7a3akqHlb/7QvIQXHVPxKbjB5` (also the DNSSEC TXT `dnscrypt-proxy.key.dnscrypt.info`).
 3. Installs under `%ProgramFiles%\dnscrypt-proxy`, or the existing install directory. An existing `dnscrypt-proxy.toml` is left alone; a first install copies `example-dnscrypt-proxy.toml`. The previous exe is kept as `dnscrypt-proxy.exe.old`.
-4. Registers and starts the official `dnscrypt-proxy -service` (needs Administrator; the tray prompts UAC).
+4. Registers and starts the official `dnscrypt-proxy -service` (needs Administrator). Tray **Install** and `-install` show a UAC prompt and wait for the elevated process. Declining the prompt stops the install.
 5. Points connected adapters with a default gateway at `127.0.0.1`, and at `::1` when IPv6 is bound (`ms_tcpip6`). Adapters without IPv6 stay on IPv4. This step is on by default. Pass `-no-dns` or `-no-system-dns`, or set `set_system_dns` to `false`, to skip.
 
 It does **not** rewrite your toml, does **not** follow forks, and does **not** auto-install on a background poll. You have to click Install or pass `-install`.

@@ -105,6 +105,8 @@ func (rt *Runtime) onReady(ctx context.Context) {
 			case <-mInstall.ClickedCh:
 				mInstall.Disable()
 				mInstall.SetTitle("Installing dnscrypt-proxy…")
+				// Install relaunches this exe with ShellExecute "runas" when the
+				// process is not already elevated, then waits for that process.
 				res, err := rt.Install(ctx)
 				if err != nil {
 					rt.Log.Warn("install", "err", err)
