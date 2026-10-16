@@ -92,6 +92,8 @@ GOOS=windows GOARCH=arm64 CGO_ENABLED=0 go build -ldflags "-H=windowsgui -s -w" 
 
 Run `dnscrypt-proxy-updater.exe`. The tray menu shows local vs GitHub, the official signed archive, **Check now**, **Install / Update dnscrypt-proxy**, **Open GitHub release page**, **Skip this version**, **Snooze 24 hours**, **Quit**.
 
+A second launch of the tray exits and says the app is already running in the system tray. `-install` (including the elevated `-install -quiet` relaunch), `-check-once`, and `-version` do not take that lock.
+
 Windows archives on GitHub are `win64` / `win32` / `winarm` zips (plus unsigned `.msi` files, which this app ignores because they have no `.minisig`).
 
 ### Linux / macOS tray (optional)
