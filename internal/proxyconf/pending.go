@@ -66,6 +66,16 @@ func IsPrivilegeError(err error) bool {
 	return false
 }
 
+// IsCheckError reports a dnscrypt-proxy -check failure. Those must be shown
+// and must not be queued or written.
+func IsCheckError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "dnscrypt-proxy -check") || strings.Contains(msg, "-check:")
+}
+
 // SavePending copies checked toml/list files into pendingDir (replacing any previous bundle).
 func SavePending(staging, pendingDir, installDir, reason string) (PendingStatus, error) {
 	if strings.TrimSpace(pendingDir) == "" {

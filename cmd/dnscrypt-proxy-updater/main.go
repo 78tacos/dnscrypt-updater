@@ -5,16 +5,47 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 
 	"github.com/78tacos/dnscrypt-updater/internal/app"
 	"github.com/78tacos/dnscrypt-updater/internal/config"
 	"github.com/78tacos/dnscrypt-updater/internal/githubrel"
+	"github.com/78tacos/dnscrypt-updater/internal/instance"
 )
 
 func main() {
 	os.Exit(run(os.Args[1:]))
+}
+
+// acquireInstance and showAlreadyRunning are replaced in tests.
+var (
+	acquireInstance              = instance.Acquire
+	showAlreadyRunning           = instance.ShowAlreadyRunning
+	userErr            io.Writer = os.Stderr
+)
+
+// takeInteractiveLock locks only the long-running tray. stop is true when run
+// should return code without starting the tray.
+func takeInteractiveLock(install, checkOnce, applyConfig, applyPending bool) (release func(), stop bool, code int) {
+	if instance.SkipsLock(install, checkOnce, applyConfig, applyPending) {
+		return func() {}, false, 0
+	}
+	rel, err := acquireInstance()
+	if errors.Is(err, instance.ErrAlreadyRunning) {
+		fmt.Fprintln(userErr, instance.AlreadyRunningMessage)
+		showAlreadyRunning()
+		return func() {}, true, 0
+	}
+	if err != nil {
+		fmt.Fprintln(userErr, err)
+		return func() {}, true, 1
+	}
+	if rel == nil {
+		rel = func() {}
+	}
+	return rel, false, 0
 }
 
 func run(args []string) int {
@@ -32,6 +63,7 @@ func run(args []string) int {
 	noNotify := fs.Bool("no-notify", false, "disable desktop notifications")
 	doInstall := fs.Bool("install", false, "download the official signed archive, verify minisign, and install dnscrypt-proxy for this system")
 	noDNS := fs.Bool("no-dns", false, "with -install, do not change system DNS")
+	noSystemDNS := fs.Bool("no-system-dns", false, "with -install, do not change system DNS (same as -no-dns)")
 	noService := fs.Bool("no-service", false, "with -install, copy files only (do not install/start the service)")
 	installDir := fs.String("install-dir", "", "with -install, destination directory")
 	doConfigure := fs.Bool("configure", false, "open the local dnscrypt-proxy settings UI (loopback HTTP)")
@@ -47,6 +79,12 @@ func run(args []string) int {
 		fmt.Printf("watches %s\n", githubrel.LatestURL)
 		return 0
 	}
+
+	release, stopLock, code := takeInteractiveLock(*doInstall, *checkOnce, *doApplyConfig, *doApplyPending)
+	if stopLock {
+		return code
+	}
+	defer release()
 
 	paths, err := config.ResolvePaths(*cfgPath)
 	if err != nil {
@@ -70,7 +108,7 @@ func run(args []string) int {
 		ForceNotify:    *doNotify,
 		NoNotify:       *noNotify,
 		Install:        *doInstall,
-		NoDNS:          *noDNS,
+		NoDNS:          *noDNS || *noSystemDNS,
 		NoService:      *noService,
 		InstallDir:     *installDir,
 		Configure:      *doConfigure,
@@ -152,6 +190,7 @@ func run(args []string) int {
 	log.Info("starting tray companion", "version", app.AppVersion, "config", rt.Paths.File, "upstream", githubrel.LatestURL)
 	err = app.RunTray(rt)
 	if errors.Is(err, app.ErrTrayUnavailable) {
+		release()
 		log.Info("tray unavailable in this build; running one-shot check (Linux/macOS tray needs: CGO_ENABLED=1 go build -tags systray)")
 		code, err := rt.CheckOnce(ctx, os.Stdout)
 		if err != nil {

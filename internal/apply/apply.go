@@ -272,7 +272,7 @@ func summarize(r Result) string {
 		b.WriteString("; service installed")
 	}
 	if r.DNSUpdated {
-		b.WriteString("; system DNS set to 127.0.0.1")
+		b.WriteString("; system DNS set to 127.0.0.1 and ::1 where IPv6 is enabled")
 	}
 	b.WriteByte('.')
 	return b.String()

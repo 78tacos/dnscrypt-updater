@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 )
 
 const tomlName = "dnscrypt-proxy.toml"
@@ -136,13 +137,19 @@ func Commit(ctx context.Context, env ApplyEnv, staging string) (ApplyResult, err
 		}
 	}
 
-	var copied []string
+	type kept struct {
+		dst string
+		bak string
+	}
+	var copied []kept
 	rollback := func() {
 		for i := len(copied) - 1; i >= 0; i-- {
 			p := copied[i]
-			bak := backupPath(p)
-			if _, err := os.Stat(bak); err == nil {
-				_ = copyFile(bak, p)
+			if p.bak == "" {
+				continue
+			}
+			if _, err := os.Stat(p.bak); err == nil {
+				_ = copyFile(p.bak, p.dst)
 			}
 		}
 	}
@@ -171,10 +178,12 @@ func Commit(ctx context.Context, env ApplyEnv, staging string) (ApplyResult, err
 		}
 		src := filepath.Join(staging, e.Name())
 		dst := filepath.Join(env.InstallDir, e.Name())
+		bak := ""
 		if _, err := os.Stat(dst); err == nil {
-			if err := copyFile(dst, backupPath(dst)); err != nil {
+			bak = timestampedBackupPath(dst, time.Now())
+			if err := copyFile(dst, bak); err != nil {
 				if retryErr := retryAfterStop(ctx, env, err, func() error {
-					return copyFile(dst, backupPath(dst))
+					return copyFile(dst, bak)
 				}); retryErr != nil {
 					rollback()
 					return out, fmt.Errorf("backup %s: %w", dst, retryErr)
@@ -189,7 +198,7 @@ func Commit(ctx context.Context, env ApplyEnv, staging string) (ApplyResult, err
 				return out, fmt.Errorf("write %s: %w", dst, retryErr)
 			}
 		}
-		copied = append(copied, dst)
+		copied = append(copied, kept{dst: dst, bak: bak})
 	}
 	if env.Check != nil && env.BinaryPath != "" {
 		if err := env.Check(ctx, env.BinaryPath, out.TomlPath); err != nil {
@@ -217,41 +226,66 @@ func Commit(ctx context.Context, env ApplyEnv, staging string) (ApplyResult, err
 
 // TryCommit writes the live install if possible.
 //
-// Order matters: always attempt an in-place Commit first (which stops the
-// service before writing). A running dnscrypt-proxy often makes a naive
-// writable probe fail even when the directory ACL does not need admin; jumping
-// straight to UAC/pending in that case was wrong. Only elevate or queue pending
-// after Commit fails with a detectable privilege / sharing error.
+// The staged toml is checked with dnscrypt-proxy -check before any write or
+// UAC prompt. A failed check is returned to the UI and is not queued.
+// Installs under Program Files, and files that are not writable, elevate
+// through the ShellExecuteEx path when one is provided. Otherwise Commit
+// writes in place (stopping the service first) and only elevates if that
+// write hits a privilege or sharing error.
 func TryCommit(ctx context.Context, env ApplyEnv, staging, pendingDir string, writable bool, elevate func(context.Context, string) error) (ApplyResult, error) {
-	_ = writable // retained for callers / UI; no longer gates elevation.
-	// Commit runs -check once before writing; do not pre-check here (avoids an
-	// extra dnscrypt-proxy console flash on Windows).
+	if err := checkStaging(ctx, env, staging); err != nil {
+		return ApplyResult{}, err
+	}
+	if elevate != nil && needsElevation(env.InstallDir, writable) {
+		return finishElevated(ctx, env, staging, pendingDir, elevate)
+	}
 	res, err := Commit(ctx, env, staging)
 	if err == nil {
 		_ = ClearPending(pendingDir)
 		return res, nil
 	}
-	if !IsPrivilegeError(err) {
+	if IsCheckError(err) || !IsPrivilegeError(err) {
 		return res, err
 	}
 	if elevate != nil {
-		if eerr := elevate(ctx, staging); eerr != nil {
-			// Settings already passed -check. If admin apply did not land them
-			// (UAC cancel, opaque "exit status 1", service failure, …), park them
-			// in AppData instead of returning a useless bare exec error.
-			if q, qerr := queuePending(staging, pendingDir, env.InstallDir, eerr); qerr == nil {
-				return q, nil
-			}
-			return ApplyResult{}, eerr
-		}
-		_ = ClearPending(pendingDir)
-		return ApplyResult{
-			TomlPath: tomlPath(env.InstallDir),
-			Message:  "Saved dnscrypt-proxy settings with administrator permission.",
-			Applied:  true,
-		}, nil
+		return finishElevated(ctx, env, staging, pendingDir, elevate)
 	}
 	return queuePending(staging, pendingDir, env.InstallDir, err)
+}
+
+func needsElevation(installDir string, writable bool) bool {
+	if InProgramFiles(installDir) {
+		return true
+	}
+	return !writable
+}
+
+func finishElevated(ctx context.Context, env ApplyEnv, staging, pendingDir string, elevate func(context.Context, string) error) (ApplyResult, error) {
+	if eerr := elevate(ctx, staging); eerr != nil {
+		if IsCheckError(eerr) {
+			return ApplyResult{}, eerr
+		}
+		if q, qerr := queuePending(staging, pendingDir, env.InstallDir, eerr); qerr == nil {
+			return q, nil
+		}
+		return ApplyResult{}, eerr
+	}
+	_ = ClearPending(pendingDir)
+	return ApplyResult{
+		TomlPath: tomlPath(env.InstallDir),
+		Message:  "Saved dnscrypt-proxy settings with administrator permission.",
+		Applied:  true,
+	}, nil
+}
+
+func checkStaging(ctx context.Context, env ApplyEnv, staging string) error {
+	if env.Check == nil || strings.TrimSpace(env.BinaryPath) == "" {
+		return nil
+	}
+	if err := env.Check(ctx, env.BinaryPath, filepath.Join(staging, tomlName)); err != nil {
+		return err
+	}
+	return nil
 }
 
 // retryAfterStop tries StopService once when a write fails because the live

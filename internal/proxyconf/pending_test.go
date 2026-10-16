@@ -159,7 +159,7 @@ func TestTryCommitElevateExitStatusQueuesPending(t *testing.T) {
 	}
 }
 
-func TestTryCommitIgnoresWritableProbeWhenCommitWorks(t *testing.T) {
+func TestUnwritableElevatesInsteadOfInPlaceWrite(t *testing.T) {
 	t.Parallel()
 	install := t.TempDir()
 	staging := t.TempDir()
@@ -171,19 +171,150 @@ func TestTryCommitIgnoresWritableProbeWhenCommitWorks(t *testing.T) {
 		t.Fatal(err)
 	}
 	elevated := false
-	res, err := TryCommit(context.Background(), ApplyEnv{InstallDir: install}, staging, pending, false, func(context.Context, string) error {
+	res, err := TryCommit(context.Background(), ApplyEnv{
+		InstallDir: install,
+		WriteErr:   fmtErr("in-place write attempted"),
+	}, staging, pending, false, func(context.Context, string) error {
 		elevated = true
-		return os.ErrPermission
+		return copyToml(staging, install)
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
+	if !elevated || !res.Applied || res.Pending {
+		t.Fatalf("elevated=%v %+v", elevated, res)
+	}
+	got, _ := os.ReadFile(filepath.Join(install, "dnscrypt-proxy.toml"))
+	if string(got) != "cache = true\n" {
+		t.Fatalf("%q", got)
+	}
+}
+
+func TestProgramFilesElevatesBeforeWrite(t *testing.T) {
+	t.Parallel()
+	install := filepath.Join(t.TempDir(), "Program Files", "dnscrypt-proxy")
+	if err := os.MkdirAll(install, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	staging := t.TempDir()
+	pending := filepath.Join(t.TempDir(), "pending")
+	if err := os.WriteFile(filepath.Join(install, "dnscrypt-proxy.toml"), []byte("cache = false\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(staging, "dnscrypt-proxy.toml"), []byte("pqdnscrypt = true\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !InProgramFiles(install) {
+		t.Fatal("fixture is not Program Files")
+	}
+	elevated := false
+	res, err := TryCommit(context.Background(), ApplyEnv{
+		InstallDir: install,
+		BinaryPath: "dnscrypt-proxy",
+		Check:      func(context.Context, string, string) error { return nil },
+		WriteErr:   fmtErr("in-place write attempted"),
+	}, staging, pending, true, func(context.Context, string) error {
+		elevated = true
+		return copyToml(staging, install)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !elevated || !res.Applied {
+		t.Fatalf("elevated=%v %+v", elevated, res)
+	}
+	got, _ := os.ReadFile(filepath.Join(install, "dnscrypt-proxy.toml"))
+	if string(got) != "pqdnscrypt = true\n" {
+		t.Fatalf("%q", got)
+	}
+}
+
+func TestCheckFailureRefusesSave(t *testing.T) {
+	t.Parallel()
+	install := filepath.Join(t.TempDir(), "Program Files", "dnscrypt-proxy")
+	if err := os.MkdirAll(install, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	staging := t.TempDir()
+	pending := filepath.Join(t.TempDir(), "pending")
+	if err := os.WriteFile(filepath.Join(install, "dnscrypt-proxy.toml"), []byte("cache = false\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(staging, "dnscrypt-proxy.toml"), []byte("nope = true\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	elevated := false
+	_, err := TryCommit(context.Background(), ApplyEnv{
+		InstallDir: install,
+		BinaryPath: "dnscrypt-proxy",
+		Check: func(context.Context, string, string) error {
+			return fmtErr("dnscrypt-proxy -check: unknown key nope")
+		},
+	}, staging, pending, false, func(context.Context, string) error {
+		elevated = true
+		return nil
+	})
+	if err == nil || !IsCheckError(err) {
+		t.Fatalf("err %v", err)
+	}
 	if elevated {
-		t.Fatal("must not elevate when in-place commit works")
+		t.Fatal("elevated after a failed check")
 	}
-	if !res.Applied || res.Pending {
-		t.Fatalf("%+v", res)
+	if ReadPending(pending).Present {
+		t.Fatal("queued a failed check")
 	}
+	got, _ := os.ReadFile(filepath.Join(install, "dnscrypt-proxy.toml"))
+	if string(got) != "cache = false\n" {
+		t.Fatalf("live file changed: %q", got)
+	}
+}
+
+func TestCommitTimestampedBackup(t *testing.T) {
+	t.Parallel()
+	install := t.TempDir()
+	staging := t.TempDir()
+	if err := os.WriteFile(filepath.Join(install, "dnscrypt-proxy.toml"), []byte("cache = false\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(staging, "dnscrypt-proxy.toml"), []byte("cache = true\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Commit(context.Background(), ApplyEnv{InstallDir: install}, staging); err != nil {
+		t.Fatal(err)
+	}
+	live, err := os.ReadFile(filepath.Join(install, "dnscrypt-proxy.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(live) != "cache = true\n" {
+		t.Fatalf("live %q", live)
+	}
+	matches, err := filepath.Glob(filepath.Join(install, "dnscrypt-proxy.toml.*.bak"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(matches) != 1 {
+		t.Fatalf("backups %v", matches)
+	}
+	bak, err := os.ReadFile(matches[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(bak) != "cache = false\n" {
+		t.Fatalf("backup %q", bak)
+	}
+	name := filepath.Base(matches[0])
+	if !strings.Contains(name, "T") || !strings.HasSuffix(name, "Z.bak") {
+		t.Fatalf("timestamped name %q", name)
+	}
+}
+
+func copyToml(staging, install string) error {
+	b, err := os.ReadFile(filepath.Join(staging, "dnscrypt-proxy.toml"))
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(install, "dnscrypt-proxy.toml"), b, 0o644)
 }
 
 func TestTryCommitCheckErrorDoesNotQueue(t *testing.T) {

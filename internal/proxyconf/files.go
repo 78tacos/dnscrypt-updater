@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // FileChange is a companion list file write.
@@ -75,6 +76,30 @@ func copyFile(src, dst string) error {
 
 func backupPath(path string) string {
 	return path + ".bak"
+}
+
+// timestampedBackupPath is path.YYYYMMDDTHHMMSSZ.bak, with a numeric suffix
+// if that name is already taken.
+func timestampedBackupPath(path string, now time.Time) string {
+	stamp := now.UTC().Format("20060102T150405Z")
+	candidate := path + "." + stamp + ".bak"
+	if _, err := os.Stat(candidate); err != nil {
+		return candidate
+	}
+	for n := 2; n < 1000; n++ {
+		candidate = fmt.Sprintf("%s.%s-%d.bak", path, stamp, n)
+		if _, err := os.Stat(candidate); err != nil {
+			return candidate
+		}
+	}
+	return candidate
+}
+
+// InProgramFiles reports a Windows Program Files install location.
+func InProgramFiles(dir string) bool {
+	n := strings.ToLower(filepath.ToSlash(dir))
+	return strings.Contains(n, "/program files/") || strings.HasSuffix(n, "/program files") ||
+		strings.Contains(n, "/program files (x86)/") || strings.HasSuffix(n, "/program files (x86)")
 }
 
 func CanWrite(path string) bool {

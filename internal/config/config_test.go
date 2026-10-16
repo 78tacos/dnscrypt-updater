@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -64,8 +65,15 @@ func TestLoadSaveRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.CurrentVersion != "2.1.14" || got.BinaryPath != cfg.BinaryPath || !got.Notify {
+	if got.CurrentVersion != "2.1.14" || got.BinaryPath != cfg.BinaryPath || !got.Notify || !got.SystemDNSEnabled() {
 		t.Fatalf("%+v", got)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"set_system_dns": true`) {
+		t.Fatalf("default save should write set_system_dns true: %s", raw)
 	}
 	missing, err := LoadFile(filepath.Join(dir, "nope.json"))
 	if err != nil {
@@ -74,7 +82,7 @@ func TestLoadSaveRoundTrip(t *testing.T) {
 	if missing.CheckInterval != DefaultInterval.String() {
 		t.Fatalf("default %+v", missing)
 	}
-	if !missing.SetSystemDNS || !missing.ManageService {
+	if !missing.SystemDNSEnabled() || !missing.ManageService {
 		t.Fatalf("install defaults %+v", missing)
 	}
 }
@@ -90,8 +98,83 @@ func TestLoadFileKeepsInstallDefaultsWhenOmitted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !got.SetSystemDNS || !got.ManageService {
+	if !got.SystemDNSEnabled() || got.SetSystemDNS == nil || !*got.SetSystemDNS || !got.ManageService {
 		t.Fatalf("omitted fields should keep defaults %+v", got)
+	}
+}
+
+func TestSystemDNSEnabled(t *testing.T) {
+	t.Parallel()
+	var unset File
+	if !unset.SystemDNSEnabled() {
+		t.Fatal("unset set_system_dns should default on")
+	}
+	off := false
+	unset.SetSystemDNS = &off
+	if unset.SystemDNSEnabled() {
+		t.Fatal("explicit false must opt out")
+	}
+	on := true
+	unset.SetSystemDNS = &on
+	if !unset.SystemDNSEnabled() {
+		t.Fatal("explicit true")
+	}
+}
+
+func TestLoadFileHonorsExplicitSystemDNSFalse(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	body := []byte("{\n  \"check_interval\": \"12h\",\n  \"notify\": true,\n  \"set_system_dns\": false\n}\n")
+	if err := os.WriteFile(path, body, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := LoadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.SystemDNSEnabled() || got.SetSystemDNS == nil || *got.SetSystemDNS {
+		t.Fatalf("explicit false must disable system DNS: %+v", got)
+	}
+	if !got.ManageService {
+		t.Fatal("omitted manage_service should stay default")
+	}
+
+	off := false
+	cfg := DefaultFile()
+	cfg.SetSystemDNS = &off
+	if err := SaveFile(path, cfg); err != nil {
+		t.Fatal(err)
+	}
+	saved, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(saved), `"set_system_dns": false`) {
+		t.Fatalf("saved config must keep explicit false: %s", saved)
+	}
+	again, err := LoadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again.SystemDNSEnabled() {
+		t.Fatal("round-trip dropped explicit false")
+	}
+}
+
+func TestLoadFileTreatsNullSystemDNSAsDefault(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.json")
+	if err := os.WriteFile(path, []byte(`{"set_system_dns":null}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := LoadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.SystemDNSEnabled() || got.SetSystemDNS == nil || !*got.SetSystemDNS {
+		t.Fatalf("null should behave as unset (default on): %+v", got)
 	}
 }
 

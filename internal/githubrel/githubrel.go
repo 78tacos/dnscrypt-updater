@@ -1,7 +1,5 @@
-// Package githubrel fetches the latest official dnscrypt-proxy GitHub release.
-//
-// The watched repository is hardcoded to DNSCrypt/dnscrypt-proxy (upstream).
-// This companion must not follow forks such as 78tacos/dnscrypt-proxy.
+// Package githubrel fetches the latest DNSCrypt/dnscrypt-proxy GitHub release.
+// Forks are not queried.
 package githubrel
 
 import (

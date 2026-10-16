@@ -33,8 +33,10 @@ type File struct {
 	Notify bool `json:"notify"`
 	// InstallDir, if set, is where -install places dnscrypt-proxy.
 	InstallDir string `json:"install_dir"`
-	// SetSystemDNS, on Windows, points connected adapters at 127.0.0.1 after install.
-	SetSystemDNS bool `json:"set_system_dns"`
+	// SetSystemDNS, on Windows, points connected adapters at 127.0.0.1 and ::1 after install.
+	// Nil means the JSON field was omitted and the default (enabled) applies.
+	// An explicit false is honored.
+	SetSystemDNS *bool `json:"set_system_dns"`
 	// ManageService installs/starts the official dnscrypt-proxy Windows service.
 	ManageService bool `json:"manage_service"`
 }
@@ -63,11 +65,24 @@ type Paths struct {
 	Pending string
 }
 
+func boolPtr(v bool) *bool {
+	return &v
+}
+
+// SystemDNSEnabled reports whether install should point adapters at the local proxy.
+// A nil SetSystemDNS is the default: enabled. Explicit false opts out.
+func (f File) SystemDNSEnabled() bool {
+	if f.SetSystemDNS == nil {
+		return true
+	}
+	return *f.SetSystemDNS
+}
+
 func DefaultFile() File {
 	return File{
 		CheckInterval: DefaultInterval.String(),
 		Notify:        true,
-		SetSystemDNS:  true,
+		SetSystemDNS:  boolPtr(true),
 		ManageService: true,
 	}
 }
@@ -122,6 +137,10 @@ func LoadFile(path string) (File, error) {
 	cfg := DefaultFile()
 	if err := json.Unmarshal(b, &cfg); err != nil {
 		return File{}, fmt.Errorf("parse config: %w", err)
+	}
+	// JSON null clears the pre-seeded pointer. Treat that as unset (default on).
+	if cfg.SetSystemDNS == nil {
+		cfg.SetSystemDNS = boolPtr(true)
 	}
 	return cfg, nil
 }
@@ -181,7 +200,7 @@ func (f File) Skips(remoteTag string) bool {
 	if skip == "" || remoteTag == "" {
 		return false
 	}
-	// Compare normalized tags when both parse; otherwise exact/trim match.
+	// Ignore a leading v/V and compare case-insensitively.
 	return strings.EqualFold(strings.TrimPrefix(strings.TrimPrefix(skip, "v"), "V"), strings.TrimPrefix(strings.TrimPrefix(strings.TrimSpace(remoteTag), "v"), "V"))
 }
 
