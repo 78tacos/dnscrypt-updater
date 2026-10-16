@@ -5,16 +5,47 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 
 	"github.com/78tacos/dnscrypt-updater/internal/app"
 	"github.com/78tacos/dnscrypt-updater/internal/config"
 	"github.com/78tacos/dnscrypt-updater/internal/githubrel"
+	"github.com/78tacos/dnscrypt-updater/internal/instance"
 )
 
 func main() {
 	os.Exit(run(os.Args[1:]))
+}
+
+// acquireInstance and showAlreadyRunning are replaced in tests.
+var (
+	acquireInstance              = instance.Acquire
+	showAlreadyRunning           = instance.ShowAlreadyRunning
+	userErr            io.Writer = os.Stderr
+)
+
+// takeInteractiveLock locks only the long-running tray. stop is true when run
+// should return code without starting the tray.
+func takeInteractiveLock(install, checkOnce bool) (release func(), stop bool, code int) {
+	if !instance.Interactive(install, checkOnce) {
+		return func() {}, false, 0
+	}
+	rel, err := acquireInstance()
+	if errors.Is(err, instance.ErrAlreadyRunning) {
+		fmt.Fprintln(userErr, instance.AlreadyRunningMessage)
+		showAlreadyRunning()
+		return func() {}, true, 0
+	}
+	if err != nil {
+		fmt.Fprintln(userErr, err)
+		return func() {}, true, 1
+	}
+	if rel == nil {
+		rel = func() {}
+	}
+	return rel, false, 0
 }
 
 func run(args []string) int {
@@ -44,6 +75,12 @@ func run(args []string) int {
 		fmt.Printf("watches %s\n", githubrel.LatestURL)
 		return 0
 	}
+
+	release, stopLock, code := takeInteractiveLock(*doInstall, *checkOnce)
+	if stopLock {
+		return code
+	}
+	defer release()
 
 	paths, err := config.ResolvePaths(*cfgPath)
 	if err != nil {
@@ -107,6 +144,7 @@ func run(args []string) int {
 	log.Info("starting tray companion", "version", app.AppVersion, "config", rt.Paths.File, "upstream", githubrel.LatestURL)
 	err = app.RunTray(rt)
 	if errors.Is(err, app.ErrTrayUnavailable) {
+		release()
 		log.Info("tray unavailable in this build; running one-shot check (Linux/macOS tray needs: CGO_ENABLED=1 go build -tags systray)")
 		code, err := rt.CheckOnce(ctx, os.Stdout)
 		if err != nil {
