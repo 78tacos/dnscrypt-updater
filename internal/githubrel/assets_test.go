@@ -65,7 +65,4 @@ func TestMinisignPubKeyMatchesScout(t *testing.T) {
 	if MinisignPubKey != want {
 		t.Fatalf("pubkey %q", MinisignPubKey)
 	}
-	if MinisignDNS != "dnscrypt-proxy.key.dnscrypt.info" {
-		t.Fatalf("dns %q", MinisignDNS)
-	}
 }

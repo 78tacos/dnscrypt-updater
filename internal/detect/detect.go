@@ -43,7 +43,6 @@ type Runner struct {
 	IsExecutable     func(path string) bool
 	RunVersion       func(ctx context.Context, path string) (string, error)
 	ServiceImagePath func() (string, bool)
-	ExtraCommonPaths []string
 	Getenv           func(string) string
 	UserHomeDir      func() (string, error)
 }
@@ -154,7 +153,6 @@ func (r Runner) commonPaths() []string {
 	} else {
 		paths = append(paths, r.unixCommonPaths()...)
 	}
-	paths = append(paths, r.ExtraCommonPaths...)
 	return paths
 }
 
