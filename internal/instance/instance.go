@@ -26,7 +26,14 @@ const errorAlreadyExists = syscall.Errno(183)
 // Install, -check-once, and other one-shot runs (including the elevated
 // -install -quiet relaunch) do not take the lock.
 func Interactive(install, checkOnce bool) bool {
-	return !install && !checkOnce
+	return !SkipsLock(install, checkOnce, false, false)
+}
+
+// SkipsLock reports commands that must not take the tray mutex.
+// -apply-config is the elevated ShellExecuteEx child started while the tray
+// still holds the lock. -apply-pending is the same kind of one-shot.
+func SkipsLock(install, checkOnce, applyConfig, applyPending bool) bool {
+	return install || checkOnce || applyConfig || applyPending
 }
 
 func reusable(release func()) func() {

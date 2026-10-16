@@ -29,6 +29,15 @@ func TestInteractiveOnlyForTray(t *testing.T) {
 			}
 		})
 	}
+	if SkipsLock(false, false, true, false) == false {
+		t.Fatal("apply-config must not take the tray lock")
+	}
+	if SkipsLock(false, false, false, true) == false {
+		t.Fatal("apply-pending must not take the tray lock")
+	}
+	if SkipsLock(false, false, false, false) {
+		t.Fatal("tray must take the lock")
+	}
 }
 
 func TestAlreadyRunningMessagePointsAtTray(t *testing.T) {

@@ -47,4 +47,4 @@ jobs:
 
             Tray **Install / Update dnscrypt-proxy** (or `dnscrypt-proxy-updater.exe -install`) downloads the official minisign-signed GitHub archive, verifies it, installs to Program Files, starts the `dnscrypt-proxy` service, and sets system DNS to `127.0.0.1`. UAC is required. Pass `-no-dns` to skip the DNS change.
 
-            Linux and macOS archives are headless `-check-once` / `-install` binaries (tray needs CGO and extra tags; see README).
+            Linux and macOS archives are headless `-check-once` / `-install` / `-configure` binaries (tray needs CGO and extra tags; see README).

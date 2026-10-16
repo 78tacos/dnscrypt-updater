@@ -37,3 +37,23 @@ func InstallFailed(err error) error {
 	}
 	return Send("dnscrypt-proxy install failed", msg, "")
 }
+
+func SettingsQueued(pendingDir string) error {
+	msg := "Could not write the install directory. Settings are saved in " + pendingDir + ". Right-click the tray and choose Apply pending settings (Administrator may be required)."
+	return Send("dnscrypt-proxy settings queued", msg, "")
+}
+
+func SettingsApplied(message string) error {
+	if message == "" {
+		message = "Pending settings were applied."
+	}
+	return Send("dnscrypt-proxy settings applied", message, "")
+}
+
+func SettingsApplyFailed(err error) error {
+	msg := "could not apply pending settings"
+	if err != nil {
+		msg = err.Error()
+	}
+	return Send("dnscrypt-proxy settings apply failed", msg, "")
+}

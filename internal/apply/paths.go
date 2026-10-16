@@ -27,6 +27,11 @@ func (a *Applier) getenv(key string) string {
 	return ""
 }
 
+// ProxyBinaryName is dnscrypt-proxy.exe on Windows and dnscrypt-proxy elsewhere.
+func ProxyBinaryName(goos string) string {
+	return proxyBinaryName(goos)
+}
+
 func proxyBinaryName(goos string) string {
 	if goos == "windows" {
 		return "dnscrypt-proxy.exe"

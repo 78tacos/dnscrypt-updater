@@ -33,7 +33,7 @@ func TestTakeInteractiveLockSkipsOneShot(t *testing.T) {
 				called = true
 				return func() {}, nil
 			}
-			release, stop, code := takeInteractiveLock(tc.install, tc.checkOnce)
+			release, stop, code := takeInteractiveLock(tc.install, tc.checkOnce, false, false)
 			if stop || code != 0 {
 				t.Fatalf("stop %v code %d", stop, code)
 			}
@@ -139,15 +139,35 @@ func TestRunInstallDoesNotLock(t *testing.T) {
 		called = true
 		return func() {}, errors.New("should not lock")
 	}
-	release, stop, code := takeInteractiveLock(true, false)
+	release, stop, code := takeInteractiveLock(true, false, false, false)
 	if called || stop || code != 0 {
 		t.Fatalf("install lock called %v stop %v code %d", called, stop, code)
 	}
 	release()
 
-	release, stop, code = takeInteractiveLock(true, false)
+	release, stop, code = takeInteractiveLock(true, false, false, false)
 	if called {
 		t.Fatal("-install -quiet would be blocked")
+	}
+	release()
+}
+
+func TestRunApplyConfigDoesNotLock(t *testing.T) {
+	orig := acquireInstance
+	t.Cleanup(func() { acquireInstance = orig })
+	called := false
+	acquireInstance = func() (func(), error) {
+		called = true
+		return func() {}, errors.New("should not lock")
+	}
+	release, stop, code := takeInteractiveLock(false, false, true, false)
+	if called || stop || code != 0 {
+		t.Fatalf("apply-config lock called %v stop %v code %d", called, stop, code)
+	}
+	release()
+	release, stop, code = takeInteractiveLock(false, false, false, true)
+	if called || stop || code != 0 {
+		t.Fatalf("apply-pending lock called %v stop %v code %d", called, stop, code)
 	}
 	release()
 }

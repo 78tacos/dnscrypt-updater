@@ -36,6 +36,31 @@ func OpenRelease(raw string) error {
 	return open(u)
 }
 
+// ValidateLoopbackURL checks that raw is an http(s) URL on 127.0.0.1 or localhost.
+func ValidateLoopbackURL(raw string) (string, error) {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return "", fmt.Errorf("parse url: %w", err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return "", fmt.Errorf("refusing non-http url")
+	}
+	host := strings.ToLower(u.Hostname())
+	if host != "127.0.0.1" && host != "localhost" && host != "::1" {
+		return "", fmt.Errorf("refusing non-loopback host %q", u.Host)
+	}
+	return u.String(), nil
+}
+
+// OpenLoopback opens an http(s) URL on 127.0.0.1 or localhost.
+func OpenLoopback(raw string) error {
+	u, err := ValidateLoopbackURL(raw)
+	if err != nil {
+		return err
+	}
+	return open(u)
+}
+
 func open(u string) error {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {

@@ -24,9 +24,36 @@ On Windows this:
 4. Registers and starts the official `dnscrypt-proxy -service` (needs Administrator). Tray **Install** and `-install` show a UAC prompt and wait for the elevated process. Declining the prompt stops the install.
 5. Points connected adapters with a default gateway at `127.0.0.1`, and at `::1` when IPv6 is bound (`ms_tcpip6`). Adapters without IPv6 stay on IPv4. This step is on by default. Pass `-no-dns` or `-no-system-dns`, or set `set_system_dns` to `false`, to skip.
 
-It does **not** rewrite your toml, does **not** follow forks, and does **not** auto-install on a background poll. You have to click Install or pass `-install`.
+It does **not** rewrite your toml on install, does **not** follow forks, and does **not** auto-install on a background poll. You have to click Install or pass `-install`. The settings UI (below) can patch toml after install, while leaving unknown keys and comments in place.
 
 Linux/macOS: files go to `/opt/dnscrypt-proxy` (needs root). Automatic DNS change is Windows-only.
+
+---
+
+## Settings UI
+
+Tray **Configure dnscrypt-proxy…** (or `-configure`) opens a **127.0.0.1** page in the default browser. It is not SimpleDnsCrypt and it is not the proxy’s own `[monitoring_ui]` dashboard.
+
+- Forms are generated from the vendored official `example-dnscrypt-proxy.toml` (pinned DNSCrypt/dnscrypt-proxy tag in [`internal/proxyconf/upstream/VERSION`](internal/proxyconf/upstream/VERSION)).
+- **Easy** tab: common keys, presets (overlays, not a full rewrite), clickable examples from upstream comments, and dismissible suggestions.
+- **Advanced** tab: the full generated catalog.
+- **List files**: `forwarding-rules.txt`, `cloaking-rules.txt`, block/allow lists, captive-portal map. Auto-downloaded `public-resolvers.md` / relays caches are not rewritten.
+- Save stages the patched toml, runs `dnscrypt-proxy -check` on that candidate, and refuses to write if the check fails (the error is shown in the page). Each overwritten file is copied to a timestamped backup (`dnscrypt-proxy.toml.YYYYMMDDTHHMMSSZ.bak`) first. On Windows, a toml under Program Files, or any file that is not writable, is applied by a one-shot elevated process (`-apply-config` via ShellExecuteEx UAC) while the tray stays in userspace. Other folders are written in place after the service is stopped. If UAC is declined or elevation is unavailable, the checked files are queued in the user config `pending` folder (`%APPDATA%\dnscrypt-proxy-updater\pending` on Windows). Download a zip from the settings page, or right-click the tray and choose **Apply pending settings**. Linux/macOS: same queue, then tray apply or `sudo dnscrypt-proxy-updater -apply-pending`. Invalid `-check` results are never queued. The settings UI does **not** keep `dnscrypt-proxy.toml` open.
+
+```bash
+dnscrypt-proxy-updater -configure
+```
+
+When official dnscrypt-proxy adds or changes config keys, refresh the pin and rebuild this updater:
+
+```bash
+./scripts/vendor-dnscrypt-schema.sh          # latest official tag
+# or: ./scripts/vendor-dnscrypt-schema.sh 2.1.18
+go generate ./internal/proxyconf
+go test ./...
+```
+
+CI job `schema-drift` fails when GitHub’s latest official tag no longer matches the vendored example toml.
 
 ---
 
@@ -46,7 +73,7 @@ Version detection runs `dnscrypt-proxy -version`, then `--version`. Windows PE `
 
 ### Prebuilt binaries
 
-GitHub Releases publish `dnscrypt-proxy-updater.exe` zips for Windows amd64/arm64 (tray, no console) and headless archives for Linux/macOS.
+GitHub Releases publish `dnscrypt-proxy-updater.exe` zips for Windows amd64/arm64 (tray, no console) and headless archives for Linux/macOS. Pull-request CI also uploads a Windows tray zip as the **test-build-windows** artifact (this is not a GitHub Release).
 
 1. Open the latest [GitHub Release](https://github.com/78tacos/dnscrypt-updater/releases/latest).
 2. Windows: unzip `dnscrypt-proxy-updater-*-windows-amd64.zip` (or `windows-arm64` on ARM PCs) and run `dnscrypt-proxy-updater.exe`.
@@ -90,7 +117,7 @@ ARM64:
 GOOS=windows GOARCH=arm64 CGO_ENABLED=0 go build -ldflags "-H=windowsgui -s -w" -o dnscrypt-proxy-updater-arm64.exe ./cmd/dnscrypt-proxy-updater
 ```
 
-Run `dnscrypt-proxy-updater.exe`. The tray menu shows local vs GitHub, the official signed archive, **Check now**, **Install / Update dnscrypt-proxy**, **Open GitHub release page**, **Skip this version**, **Snooze 24 hours**, **Quit**.
+Run `dnscrypt-proxy-updater.exe`. The tray menu shows local vs GitHub, **Check now**, **Configure dnscrypt-proxy…**, **Apply pending settings** (when a save could not write the install dir), **Open GitHub release page**, and **Quit**. Less common actions (**Install / Update**, **Skip this version**, **Snooze 24 hours**) live under **More**.
 
 A second launch of the tray exits and says the app is already running in the system tray. `-install` (including the elevated `-install -quiet` relaunch), `-check-once`, and `-version` do not take that lock.
 
@@ -122,7 +149,7 @@ See [`config.example.json`](config.example.json).
 | `set_system_dns` | `true` | After install on Windows, set connected adapters to `127.0.0.1` and to `::1` when IPv6 is enabled. Omit the field to keep the default. `false` opts out. |
 | `manage_service` | `true` | Install/start `dnscrypt-proxy -service`. |
 
-CLI: `-install`, `-no-dns`, `-no-system-dns` (same as `-no-dns`), `-no-service`, `-install-dir`, `-current-version`, `-binary-path`, `-config`, `-no-notify`, `-notify` (with `-check-once`), `-quiet`.
+CLI: `-install`, `-configure`, `-apply-pending`, `-apply-config` (internal, after UAC), `-no-dns`, `-no-system-dns` (same as `-no-dns`), `-no-service`, `-install-dir`, `-current-version`, `-binary-path`, `-config`, `-no-notify`, `-notify` (with `-check-once`), `-quiet`.
 
 `set_system_dns` defaults to on, including when the field is left out of `config.json` or is JSON `null`. [`config.example.json`](config.example.json) shows `"set_system_dns": true`. An explicit `false` is kept. `-no-dns` and `-no-system-dns` skip the change for that run even when the config value is true.
 
@@ -170,6 +197,7 @@ Downloads are only accepted from `github.com` and `*.githubusercontent.com`. MSI
 
 ```bash
 go test ./...
+go generate ./internal/proxyconf
 ```
 
 Version compare lives in `internal/version` and is covered by table-driven tests. GitHub ETag handling, CLI parsing, skip/snooze, minisign verify, zip extract, and install file copy are unit-tested with fakes — no live network required.

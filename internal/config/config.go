@@ -58,10 +58,11 @@ type State struct {
 
 // Paths locates config/state/log files.
 type Paths struct {
-	Dir   string
-	File  string
-	State string
-	Log   string
+	Dir     string
+	File    string
+	State   string
+	Log     string
+	Pending string
 }
 
 func boolPtr(v bool) *bool {
@@ -94,10 +95,11 @@ func ResolvePaths(explicitConfig string) (Paths, error) {
 		}
 		dir := filepath.Dir(abs)
 		return Paths{
-			Dir:   dir,
-			File:  abs,
-			State: filepath.Join(dir, "state.json"),
-			Log:   filepath.Join(dir, AppName+".log"),
+			Dir:     dir,
+			File:    abs,
+			State:   filepath.Join(dir, "state.json"),
+			Log:     filepath.Join(dir, AppName+".log"),
+			Pending: filepath.Join(dir, "pending"),
 		}, nil
 	}
 	base, err := os.UserConfigDir()
@@ -112,10 +114,11 @@ func ResolvePaths(explicitConfig string) (Paths, error) {
 		}
 	}
 	return Paths{
-		Dir:   dir,
-		File:  filepath.Join(dir, "config.json"),
-		State: filepath.Join(dir, "state.json"),
-		Log:   filepath.Join(dir, AppName+".log"),
+		Dir:     dir,
+		File:    filepath.Join(dir, "config.json"),
+		State:   filepath.Join(dir, "state.json"),
+		Log:     filepath.Join(dir, AppName+".log"),
+		Pending: filepath.Join(dir, "pending"),
 	}, nil
 }
 

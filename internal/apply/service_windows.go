@@ -4,6 +4,7 @@ package apply
 
 import (
 	"context"
+	"fmt"
 	"os/exec"
 	"strings"
 )
@@ -32,11 +33,39 @@ func (s nativeService) Install(ctx context.Context, binPath string) error {
 }
 
 func (s nativeService) Stop(ctx context.Context, binPath string) error {
-	return s.proxyService(ctx, binPath, "stop")
+	// Prefer sc.exe so we do not flash a dnscrypt-proxy console window.
+	_ = binPath
+	out, err := s.run(ctx, "", "sc", "stop", "dnscrypt-proxy")
+	if err == nil {
+		return nil
+	}
+	text := strings.ToUpper(string(out))
+	if strings.Contains(text, "1062") || strings.Contains(text, "NOT BEEN STARTED") || strings.Contains(text, "1060") {
+		return nil
+	}
+	msg := strings.TrimSpace(string(out))
+	if msg == "" {
+		msg = err.Error()
+	}
+	return fmt.Errorf("sc stop dnscrypt-proxy: %s", msg)
 }
 
 func (s nativeService) Start(ctx context.Context, binPath string) error {
-	return s.proxyService(ctx, binPath, "start")
+	_ = binPath
+	out, err := s.run(ctx, "", "sc", "start", "dnscrypt-proxy")
+	if err == nil {
+		return nil
+	}
+	text := strings.ToUpper(string(out))
+	// Already running is fine for our restart sequence.
+	if strings.Contains(text, "1056") || strings.Contains(text, "ALREADY BEEN STARTED") {
+		return nil
+	}
+	msg := strings.TrimSpace(string(out))
+	if msg == "" {
+		msg = err.Error()
+	}
+	return fmt.Errorf("sc start dnscrypt-proxy: %s", msg)
 }
 
 func defaultService(goos string) ServiceManager {
@@ -45,6 +74,7 @@ func defaultService(goos string) ServiceManager {
 		if dir != "" {
 			cmd.Dir = dir
 		}
+		hideConsole(cmd)
 		return cmd.CombinedOutput()
 	}}
 }
