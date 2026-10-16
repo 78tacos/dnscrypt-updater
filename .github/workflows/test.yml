@@ -59,7 +59,13 @@ jobs:
         run: |
           go generate ./internal/proxyconf
           git diff --exit-code -- internal/proxyconf/catalog_gen.go
+      - name: Schema drift API error handling
+        run: |
+          chmod +x scripts/check-upstream-schema.sh scripts/check-upstream-schema_test.sh
+          ./scripts/check-upstream-schema_test.sh
       - name: Official upstream schema pin
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           chmod +x scripts/check-upstream-schema.sh
           ./scripts/check-upstream-schema.sh
