@@ -93,3 +93,17 @@ textarea { min-height: 180px; font-family: ui-monospace, Consolas, monospace; fo
 a.chip { text-decoration: none; display: inline-block; }
 .dirty { outline: 1px solid var(--accent); }
 .en { accent-color: var(--accent); }
+.badge {
+  display: inline-block;
+  margin-left: 8px;
+  background: #1d3a2e;
+  color: var(--accent);
+  border: 1px solid #2e6b4f;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  letter-spacing: .02em;
+  vertical-align: middle;
+}
+#autostart-card .muted { margin: 8px 0 0; }

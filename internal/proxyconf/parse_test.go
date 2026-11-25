@@ -11,12 +11,15 @@ import (
 
 func TestLoadCatalog(t *testing.T) {
 	t.Parallel()
-	cat, err := LoadCatalog()
+	cat, err := LoadCatalog("")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cat.UpstreamTag != "2.1.18" {
+	if cat.UpstreamTag != GeneratedUpstreamTag {
 		t.Fatalf("tag %q", cat.UpstreamTag)
+	}
+	if cat.Source != CatalogSourceEmbedded {
+		t.Fatalf("source %q", cat.Source)
 	}
 	if cat.ExampleSHA256 == "" || len(cat.ExampleSHA256) != 64 {
 		t.Fatalf("sha %q", cat.ExampleSHA256)
@@ -75,6 +78,10 @@ func TestLoadCatalog(t *testing.T) {
 	mon, _ := cat.FieldByPath("monitoring_ui.enabled")
 	if mon.Type != TypeBool {
 		t.Fatalf("monitoring type %s", mon.Type)
+	}
+	doh, ok := cat.FieldByPath("doh_check_cert_hashes_on_connect")
+	if !ok || doh.Type != TypeBool || !doh.Commented {
+		t.Fatalf("2.1.21 doh cert-hash field %+v ok=%v", doh, ok)
 	}
 	if ValidatePresets(cat) != nil {
 		t.Fatal(ValidatePresets(cat))

@@ -32,6 +32,9 @@ type Field struct {
 	ExampleFile  string   `json:"example_file,omitempty"`
 	Warning      bool     `json:"warning"`
 	Easy         bool     `json:"easy"`
+	// NewIn is the catalog version that introduced this key, when it was not
+	// in the previous catalog. Empty means the key is not new.
+	NewIn string `json:"new_in,omitempty"`
 }
 
 // Section groups fields in the example toml.
@@ -41,10 +44,18 @@ type Section struct {
 	Help  string `json:"help,omitempty"`
 }
 
+// OtherSectionID is the section for live keys the example catalog does not know.
+const OtherSectionID = "other"
+
+// OtherSectionTitle is the label for OtherSectionID.
+const OtherSectionTitle = "Other"
+
 // Catalog is the generated-from-upstream settings surface.
 type Catalog struct {
-	UpstreamTag    string    `json:"upstream_tag"`
-	ExampleSHA256  string    `json:"example_sha256"`
+	UpstreamTag   string `json:"upstream_tag"`
+	ExampleSHA256 string `json:"example_sha256"`
+	// Source is CatalogSourceInstall or CatalogSourceEmbedded.
+	Source         string    `json:"source"`
 	Sections       []Section `json:"sections"`
 	Fields         []Field   `json:"fields"`
 	CompanionFiles []string  `json:"companion_files"`

@@ -1,0 +1,54 @@
+name: upstream-schema
+
+# Weekly check of DNSCrypt/dnscrypt-proxy. When the official example or
+# config.go moves, refresh upstream/ and open a pull request. The settings
+# page already prefers the example copied into the install directory; this
+# pin is the fallback and the schema-drift check.
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22.x"
+      - name: Refresh vendored schema
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          chmod +x scripts/vendor-dnscrypt-schema.sh
+          ./scripts/vendor-dnscrypt-schema.sh
+      - name: Open pull request when the pin moved
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet; then
+            echo "Vendored schema matches upstream."
+            exit 0
+          fi
+          TAG="$(tr -d '[:space:]' < internal/proxyconf/upstream/VERSION)"
+          BRANCH="upstream-schema-${TAG}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH"
+          git add internal/proxyconf/upstream internal/proxyconf/catalog_gen.go
+          git commit -m "Refresh vendored dnscrypt-proxy schema to ${TAG}"
+          git push --force-with-lease origin "$BRANCH"
+          open="$(gh pr list --head "$BRANCH" --base main --state open --json number --jq 'length')"
+          if [ "$open" != "0" ]; then
+            echo "Pull request already open."
+            exit 0
+          fi
+          gh pr create --base main --head "$BRANCH" \
+            --title "Refresh vendored dnscrypt-proxy schema to ${TAG}" \
+            --body "Updates the embedded \`example-dnscrypt-proxy.toml\` and \`config.go\` pin to DNSCrypt/dnscrypt-proxy \`${TAG}\`. The settings page prefers the example installed with dnscrypt-proxy; this pin is the fallback used when that file is missing."

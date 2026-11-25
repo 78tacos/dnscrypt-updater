@@ -98,6 +98,14 @@ func TestEncodeLists(t *testing.T) {
 	if got != "['a', 'b']" {
 		t.Fatal(got)
 	}
+	nested := encodeTOML(map[string]any{"value": "[]"}, TypeTable)
+	if nested != "{ value = '[]' }" {
+		t.Fatalf("nested string %s", nested)
+	}
+	table := encodeTOML("{ value = [] }", TypeTable)
+	if table != "{ value = [] }" {
+		t.Fatalf("raw table %s", table)
+	}
 	raw, _ := json.Marshal(true)
 	s, err := encodePatchValue(raw, Catalog{Fields: []Field{{Path: "x", Type: TypeBool}}}, "x")
 	if err != nil || s != "true" {

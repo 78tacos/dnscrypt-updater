@@ -4,8 +4,11 @@ package app
 
 import (
 	"context"
+	"runtime"
+	"sync"
 	"time"
 
+	"github.com/78tacos/dnscrypt-updater/internal/autostart"
 	"github.com/78tacos/dnscrypt-updater/internal/proxyconf"
 	"github.com/getlantern/systray"
 )
@@ -43,6 +46,7 @@ func (rt *Runtime) onReady(ctx context.Context) {
 	mOpen := systray.AddMenuItem("Open GitHub release page", "Open the official upstream release")
 	systray.AddSeparator()
 	mSettings := systray.AddMenuItem("Configure dnscrypt-proxy…", "Open the local settings UI")
+	mAuto := systray.AddMenuItemCheckbox(autostart.Label(runtime.GOOS), autostart.Help(runtime.GOOS), false)
 	mPending := systray.AddMenuItem("Apply pending settings", "Copy queued settings into the install dir and restart the service (may prompt for Administrator)")
 	mPending.Hide()
 	systray.AddSeparator()
@@ -52,8 +56,34 @@ func (rt *Runtime) onReady(ctx context.Context) {
 	mSnooze := mMore.AddSubMenuItem("Snooze 24 hours", "Suppress notifications for a day")
 	mQuit := systray.AddMenuItem("Quit", "Quit "+AppName)
 
+	autoWarned := false
+	var autostartMu sync.Mutex
+	syncAutostart := func() {
+		autostartMu.Lock()
+		defer autostartMu.Unlock()
+		on, err := runtimeAutostart{}.Enabled()
+		if err != nil {
+			mAuto.Uncheck()
+			mAuto.Disable()
+			if !autoWarned {
+				autoWarned = true
+				rt.Log.Warn("start with OS", "err", err)
+			}
+			return
+		}
+		autoWarned = false
+		mAuto.Enable()
+		mAuto.SetTitle(autostart.Label(runtime.GOOS))
+		if on {
+			mAuto.Check()
+		} else {
+			mAuto.Uncheck()
+		}
+	}
+
 	applyStatus := func() {
 		res := rt.snapshot()
+		syncAutostart()
 		systray.SetTooltip(tooltipFor(res))
 		mLocal.SetTitle(statusMenuTitle(res))
 		mRemote.SetTitle(remoteMenuTitle(res))
@@ -77,6 +107,8 @@ func (rt *Runtime) onReady(ctx context.Context) {
 			mPending.Hide()
 		}
 	}
+
+	syncAutostart()
 
 	go func() {
 		run := func(force bool) {
@@ -147,6 +179,17 @@ func (rt *Runtime) onReady(ctx context.Context) {
 				if _, err := rt.OpenSettings(ctx); err != nil {
 					rt.Log.Warn("settings ui", "err", err)
 				}
+			case <-mAuto.ClickedCh:
+				cur, err := runtimeAutostart{}.Enabled()
+				if err != nil {
+					rt.Log.Warn("start with OS", "err", err)
+					syncAutostart()
+					break
+				}
+				if err := (runtimeAutostart{}).Set(!cur); err != nil {
+					rt.Log.Warn("start with OS", "err", err)
+				}
+				syncAutostart()
 			case <-mPending.ClickedCh:
 				mPending.Disable()
 				mPending.SetTitle("Applying pending settings…")

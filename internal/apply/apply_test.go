@@ -17,6 +17,7 @@ import (
 	"aead.dev/minisign"
 
 	"github.com/78tacos/dnscrypt-updater/internal/githubrel"
+	"github.com/78tacos/dnscrypt-updater/internal/proxyconf"
 )
 
 func TestValidateAssetURL(t *testing.T) {
@@ -202,6 +203,24 @@ func TestInstallPayloadFreshCopiesExampleToml(t *testing.T) {
 	}
 	if string(toml) != "listen" {
 		t.Fatalf("toml %q", toml)
+	}
+}
+
+func TestWriteExampleTag(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	if err := writeExampleTag(dir, "v2.2.1"); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(dir, proxyconf.ExampleTagName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b) != "2.2.1\n" {
+		t.Fatalf("tag %q", b)
+	}
+	if err := writeExampleTag(dir, ""); err != nil {
+		t.Fatal(err)
 	}
 }
 

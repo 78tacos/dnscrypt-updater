@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/78tacos/dnscrypt-updater/internal/proxyconf"
 )
 
 func findProxyBinary(root, goos string) (string, error) {
@@ -119,6 +121,17 @@ func restoreBackup(backupPath, destBin string) error {
 		return err
 	}
 	return copyFile(backupPath, destBin)
+}
+
+// writeExampleTag records the dnscrypt-proxy version next to the example toml
+// so the settings catalog can name a "New in X" badge after an update.
+func writeExampleTag(dir, version string) error {
+	version = strings.TrimSpace(version)
+	version = strings.TrimPrefix(strings.TrimPrefix(version, "v"), "V")
+	if dir == "" || version == "" {
+		return nil
+	}
+	return os.WriteFile(filepath.Join(dir, proxyconf.ExampleTagName), []byte(version+"\n"), 0o644)
 }
 
 func copyFile(src, dst string) error {

@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strings"
-	"sync"
 )
 
 //go:embed upstream/example-dnscrypt-proxy.toml
@@ -16,18 +15,34 @@ import (
 //go:embed upstream/example-*.txt
 var upstreamFS embed.FS
 
-var (
-	catalogOnce sync.Once
-	catalogVal  Catalog
-	catalogErr  error
+const (
+	// ExampleTOMLName is the upstream example apply copies into the install directory.
+	ExampleTOMLName = "example-dnscrypt-proxy.toml"
+	// ExampleTagName is the dnscrypt-proxy version written next to that example.
+	ExampleTagName = "example-dnscrypt-proxy.tag"
+
+	// CatalogSourceEmbedded is the copy pinned under upstream/.
+	CatalogSourceEmbedded = "embedded"
+	// CatalogSourceInstall is example-dnscrypt-proxy.toml from the install directory.
+	CatalogSourceInstall = "install"
 )
 
-// LoadCatalog parses the vendored upstream example toml and config.go types.
-func LoadCatalog() (Catalog, error) {
-	catalogOnce.Do(func() {
-		catalogVal, catalogErr = parseVendored()
-	})
-	return catalogVal, catalogErr
+// LoadCatalog builds the settings catalog.
+//
+// It prefers example-dnscrypt-proxy.toml in installDir (the file apply copies
+// on every update). A missing file, a read error, or a file that does not
+// parse falls back to the embedded upstream copy. The result is not cached;
+// call LoadCatalog again after an update.
+func LoadCatalog(installDir string) (Catalog, error) {
+	if cat, ok := tryInstalledCatalog(installDir); ok {
+		return cat, nil
+	}
+	cat, err := parseVendored()
+	if err != nil {
+		return Catalog{}, err
+	}
+	cat.Source = CatalogSourceEmbedded
+	return cat, nil
 }
 
 func parseVendored() (Catalog, error) {

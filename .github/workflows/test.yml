@@ -10,13 +10,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        # QA runs Linux locally. Windows and macOS are covered here, including
+        # the OS-gated autostart integration tests (HKCU Run and LaunchAgent).
+        os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.22.x"
+          # Go 1.22's cgo/external link does not emit Mach-O LC_UUID. dyld on
+          # macos-latest (macOS 26) aborts those test binaries. 1.24+ emits it.
+          # The module stays go 1.22; this is only the CI toolchain.
+          go-version: "1.24.x"
       - name: Test
         run: go test ./...
       - name: Build
