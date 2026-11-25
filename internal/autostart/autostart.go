@@ -142,7 +142,8 @@ func LinuxAutostartPath(home, xdg, app string) string {
 		app = AppName
 	}
 	base := strings.TrimSpace(xdg)
-	if base == "" {
+	// The XDG base-dir spec says a relative XDG_CONFIG_HOME is invalid.
+	if base == "" || !filepath.IsAbs(base) {
 		base = filepath.Join(home, ".config")
 	}
 	return filepath.Join(base, "autostart", app+".desktop")

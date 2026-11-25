@@ -45,7 +45,7 @@ func TestLoadCatalogFallsBackWhenExampleMissingOrInvalid(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if missing.Source != CatalogSourceEmbedded || missing.UpstreamTag != "2.1.18" {
+	if missing.Source != CatalogSourceEmbedded || missing.UpstreamTag != GeneratedUpstreamTag {
 		t.Fatalf("missing: source %q tag %q", missing.Source, missing.UpstreamTag)
 	}
 	if _, ok := missing.FieldByPath("monitoring_ui.enabled"); !ok {
@@ -63,8 +63,32 @@ func TestLoadCatalogFallsBackWhenExampleMissingOrInvalid(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Source != CatalogSourceEmbedded || got.UpstreamTag != "2.1.18" {
+	if got.Source != CatalogSourceEmbedded || got.UpstreamTag != GeneratedUpstreamTag {
 		t.Fatalf("invalid example: source %q tag %q", got.Source, got.UpstreamTag)
+	}
+
+	partial := t.TempDir()
+	if err := os.WriteFile(filepath.Join(partial, ExampleTOMLName), []byte("cache = true\nthis is not toml {{{{\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err = LoadCatalog(partial)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Source != CatalogSourceEmbedded {
+		t.Fatalf("partially invalid example source %q", got.Source)
+	}
+
+	open := t.TempDir()
+	if err := os.WriteFile(filepath.Join(open, ExampleTOMLName), []byte("cache = true\nbroken = [\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err = LoadCatalog(open)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Source != CatalogSourceEmbedded {
+		t.Fatalf("incomplete example source %q", got.Source)
 	}
 
 	empty := t.TempDir()

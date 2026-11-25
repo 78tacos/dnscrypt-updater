@@ -123,20 +123,29 @@
   }
 
   async function saveAutostart() {
-    const enabled = $("autostart").checked;
-    const res = await api("/api/autostart", {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ enabled }),
-    });
-    if (!res.ok) {
-      showStatus("Could not update start-with-OS: " + (await res.text()), "warn");
-      $("autostart").checked = !enabled;
-      return;
+    const box = $("autostart");
+    const enabled = box.checked;
+    box.disabled = true;
+    try {
+      const res = await api("/api/autostart", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ enabled }),
+      });
+      if (!res.ok) {
+        showStatus("Could not update start-with-OS: " + (await res.text()), "warn");
+        box.checked = !enabled;
+        return;
+      }
+      const data = await res.json();
+      state.autostart_enabled = !!data.enabled;
+      box.checked = !!data.enabled;
+    } catch (err) {
+      showStatus("Could not update start-with-OS: " + err, "warn");
+      box.checked = !enabled;
+    } finally {
+      box.disabled = false;
     }
-    const data = await res.json();
-    state.autostart_enabled = !!data.enabled;
-    $("autostart").checked = !!data.enabled;
   }
 
   function zipURL() {

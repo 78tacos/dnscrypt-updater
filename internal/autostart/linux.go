@@ -69,9 +69,30 @@ func linuxDesktop(exec string) string {
 		"X-GNOME-Autostart-enabled=true\n"
 }
 
+// desktopExec quotes an Exec= argument and escapes it the way the desktop
+// entry spec requires. A literal percent is always %% so it is not read as a
+// field code. Inside quotes, backslash, quote, dollar, and backtick are escaped.
 func desktopExec(path string) string {
-	if strings.ContainsAny(path, " \t\"\\$`") {
-		return `"` + strings.ReplaceAll(path, `"`, `\"`) + `"`
+	needsQuote := strings.ContainsAny(path, " \t\n\"\\$`'")
+	var b strings.Builder
+	if needsQuote {
+		b.WriteByte('"')
 	}
-	return path
+	for _, r := range path {
+		switch r {
+		case '%':
+			b.WriteString("%%")
+		case '\\', '"', '$', '`':
+			if needsQuote {
+				b.WriteByte('\\')
+			}
+			b.WriteRune(r)
+		default:
+			b.WriteRune(r)
+		}
+	}
+	if needsQuote {
+		b.WriteByte('"')
+	}
+	return b.String()
 }

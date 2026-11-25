@@ -52,7 +52,7 @@ func parseDoc(src string) *doc {
 			i++
 			continue
 		}
-		key, val, commented, end, ok := readKey(d.lines, i)
+		key, val, commented, end, _, ok := readKey(d.lines, i)
 		if !ok {
 			i++
 			continue
@@ -254,7 +254,9 @@ func encodeTOML(v any, typ string) string {
 	case json.Number:
 		return val.String()
 	case string:
-		if rawTOMLContainer(val) && (typ == TypeTable || typ == TypeInlineTableList || typ == TypeUnknown) {
+		// Raw text is only the table editor's own value. Nested strings are
+		// encoded with TypeString so a value like "[]" stays a quoted string.
+		if rawTOMLContainer(val) && (typ == TypeTable || typ == TypeInlineTableList) {
 			return strings.TrimSpace(val)
 		}
 		return quoteTOML(val)
@@ -285,7 +287,7 @@ func encodeInlineTables(arr []any) string {
 	for _, x := range arr {
 		m, ok := x.(map[string]any)
 		if !ok {
-			parts = append(parts, encodeTOML(x, TypeUnknown))
+			parts = append(parts, encodeTOML(x, TypeString))
 			continue
 		}
 		parts = append(parts, encodeInlineTable(m))
@@ -311,7 +313,7 @@ func encodeInlineTable(m map[string]any) string {
 	}
 	parts := make([]string, 0, len(keys))
 	for _, k := range keys {
-		parts = append(parts, k+" = "+encodeTOML(m[k], TypeUnknown))
+		parts = append(parts, k+" = "+encodeTOML(m[k], TypeString))
 	}
 	return "{ " + strings.Join(parts, ", ") + " }"
 }

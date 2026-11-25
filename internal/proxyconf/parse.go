@@ -74,8 +74,14 @@ func parseExampleTOML(src string, types map[string]string) (Catalog, error) {
 			continue
 		}
 
-		key, val, commented, end, ok := readKey(lines, i)
+		key, val, commented, end, incomplete, ok := readKey(lines, i)
+		if incomplete {
+			return Catalog{}, fmt.Errorf("example toml: incomplete value for %q", key)
+		}
 		if !ok {
+			if trim != "" && !hashOnlyLine(trim) {
+				return Catalog{}, fmt.Errorf("example toml: cannot parse %q", trim)
+			}
 			i++
 			continue
 		}
@@ -177,6 +183,21 @@ func bannerTitle(trim string) (string, bool) {
 	return inner, true
 }
 
+// hashOnlyLine is a banner rule made of '#' and spaces, including the short
+// rules in the boxed title that are not long enough to be section decorations.
+func hashOnlyLine(trim string) bool {
+	s := strings.ReplaceAll(trim, " ", "")
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r != '#' {
+			return false
+		}
+	}
+	return true
+}
+
 func isDecorHash(trim string) bool {
 	s := strings.ReplaceAll(trim, " ", "")
 	if len(s) < 8 {
@@ -238,10 +259,10 @@ func tableHeader(trim string) (name string, commented bool, ok bool) {
 	return name, commented, true
 }
 
-func readKey(lines []string, i int) (key, val string, commented bool, end int, ok bool) {
+func readKey(lines []string, i int) (key, val string, commented bool, end int, incomplete, ok bool) {
 	trim := strings.TrimSpace(stripNL(lines[i]))
 	if trim == "" || strings.HasPrefix(trim, "##") {
-		return "", "", false, i, false
+		return "", "", false, i, false, false
 	}
 	line := trim
 	if strings.HasPrefix(line, "#") {
@@ -250,24 +271,23 @@ func readKey(lines []string, i int) (key, val string, commented bool, end int, o
 	}
 	eq := strings.Index(line, "=")
 	if eq <= 0 {
-		return "", "", false, i, false
+		return "", "", false, i, false, false
 	}
 	key = strings.TrimSpace(line[:eq])
 	if key == "" || strings.ContainsAny(key, " \t[]") {
-		return "", "", false, i, false
+		return "", "", false, i, false, false
 	}
 	for _, r := range key {
 		if !(unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' || r == '-') {
-			return "", "", false, i, false
+			return "", "", false, i, false, false
 		}
 	}
 	rest := strings.TrimSpace(line[eq+1:])
-	val, extra, errEnd := readValue(lines, i, rest, commented)
-	if extra < i {
-		return "", "", false, i, false
+	val, end, incomplete = readValue(lines, i, rest, commented)
+	if end < i {
+		return "", "", false, i, false, false
 	}
-	_ = errEnd
-	return key, val, commented, extra, true
+	return key, val, commented, end, incomplete, true
 }
 
 func readValue(lines []string, start int, rest string, commented bool) (val string, end int, incomplete bool) {

@@ -5,6 +5,7 @@ package app
 import (
 	"context"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/78tacos/dnscrypt-updater/internal/autostart"
@@ -56,7 +57,10 @@ func (rt *Runtime) onReady(ctx context.Context) {
 	mQuit := systray.AddMenuItem("Quit", "Quit "+AppName)
 
 	autoWarned := false
+	var autostartMu sync.Mutex
 	syncAutostart := func() {
+		autostartMu.Lock()
+		defer autostartMu.Unlock()
 		on, err := runtimeAutostart{}.Enabled()
 		if err != nil {
 			mAuto.Uncheck()

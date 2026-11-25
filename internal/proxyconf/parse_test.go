@@ -15,7 +15,7 @@ func TestLoadCatalog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cat.UpstreamTag != "2.1.18" {
+	if cat.UpstreamTag != GeneratedUpstreamTag {
 		t.Fatalf("tag %q", cat.UpstreamTag)
 	}
 	if cat.Source != CatalogSourceEmbedded {

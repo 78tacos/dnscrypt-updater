@@ -109,6 +109,40 @@ func TestLinuxAutostartHomeAndQuoting(t *testing.T) {
 	}
 }
 
+func TestLinuxRelativeXDGConfigHome(t *testing.T) {
+	t.Parallel()
+	home := t.TempDir()
+	got := LinuxAutostartPath(home, "config", AppName)
+	want := filepath.Join(home, ".config", "autostart", AppName+".desktop")
+	if got != want {
+		t.Fatalf("relative XDG_CONFIG_HOME: got %s want %s", got, want)
+	}
+	abs := filepath.Join(t.TempDir(), "xdg")
+	got = LinuxAutostartPath(home, abs, AppName)
+	want = filepath.Join(abs, "autostart", AppName+".desktop")
+	if got != want {
+		t.Fatalf("absolute XDG_CONFIG_HOME: got %s want %s", got, want)
+	}
+}
+
+func TestDesktopExec(t *testing.T) {
+	t.Parallel()
+	cases := []struct{ in, want string }{
+		{"/usr/local/bin/dnscrypt-proxy-updater", "/usr/local/bin/dnscrypt-proxy-updater"},
+		{"/home/someone/My Apps/dnscrypt-proxy-updater", `"/home/someone/My Apps/dnscrypt-proxy-updater"`},
+		{"/home/alice/apps%z/updater", "/home/alice/apps%%z/updater"},
+		{"/home/o'brien/app", `"/home/o'brien/app"`},
+		{"/opt/app$dir/updater", `"/opt/app\$dir/updater"`},
+		{"/opt/app`id`/updater", "\"/opt/app\\`id\\`/updater\""},
+		{"/opt/app\\bin\\updater", `"/opt/app\\bin\\updater"`},
+	}
+	for _, tc := range cases {
+		if got := desktopExec(tc.in); got != tc.want {
+			t.Fatalf("desktopExec(%q)=%q want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
 func TestDarwinLaunchAgentEnableDisable(t *testing.T) {
 	t.Parallel()
 	home := t.TempDir()
