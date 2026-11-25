@@ -11,12 +11,15 @@ import (
 
 func TestLoadCatalog(t *testing.T) {
 	t.Parallel()
-	cat, err := LoadCatalog()
+	cat, err := LoadCatalog("")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if cat.UpstreamTag != "2.1.18" {
 		t.Fatalf("tag %q", cat.UpstreamTag)
+	}
+	if cat.Source != CatalogSourceEmbedded {
+		t.Fatalf("source %q", cat.Source)
 	}
 	if cat.ExampleSHA256 == "" || len(cat.ExampleSHA256) != 64 {
 		t.Fatalf("sha %q", cat.ExampleSHA256)

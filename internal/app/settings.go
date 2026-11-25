@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/78tacos/dnscrypt-updater/internal/apply"
+	"github.com/78tacos/dnscrypt-updater/internal/autostart"
 	"github.com/78tacos/dnscrypt-updater/internal/notify"
 	"github.com/78tacos/dnscrypt-updater/internal/openurl"
 	"github.com/78tacos/dnscrypt-updater/internal/proxyconf"
@@ -57,6 +58,8 @@ func (rt *Runtime) settingsOpts() settingsui.Options {
 		StopService:  ap.StopService,
 		StartService: ap.StartService,
 		PendingDir:   func() string { return rt.Paths.Pending },
+		CatalogState: filepath.Join(rt.Paths.Dir, "catalog-snapshot.json"),
+		Autostart:    runtimeAutostart{},
 		OnPending: func(st proxyconf.PendingStatus) {
 			rt.pingMenu()
 			if st.Present {
@@ -80,6 +83,7 @@ func (rt *Runtime) OpenSettings(ctx context.Context) (string, error) {
 		if err != nil {
 			return "", err
 		}
+		rt.settingsSrv = srv
 		rt.settingsURL = u
 		rt.Log.Info("settings ui listening", "url", u)
 	}
@@ -95,6 +99,9 @@ func (rt *Runtime) RunSettingsUI(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	rt.settingsMu.Lock()
+	rt.settingsSrv = srv
+	rt.settingsMu.Unlock()
 	u, err := srv.Start(ctx)
 	if err != nil {
 		return err
@@ -106,6 +113,28 @@ func (rt *Runtime) RunSettingsUI(ctx context.Context) error {
 	_ = openurl.OpenLoopback(u)
 	<-ctx.Done()
 	return nil
+}
+
+// runtimeAutostart is the per-user login item for this process.
+type runtimeAutostart struct{}
+
+func (runtimeAutostart) Label() string { return autostart.Label(runtime.GOOS) }
+func (runtimeAutostart) Help() string  { return autostart.Help(runtime.GOOS) }
+
+func (runtimeAutostart) Enabled() (bool, error) {
+	t, err := autostart.Current()
+	if err != nil {
+		return false, err
+	}
+	return t.Enabled()
+}
+
+func (runtimeAutostart) Set(on bool) error {
+	t, err := autostart.Current()
+	if err != nil {
+		return err
+	}
+	return t.Set(on)
 }
 
 func (rt *Runtime) checkProxyConfig(ctx context.Context, bin, configPath string) error {

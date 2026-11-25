@@ -8,7 +8,7 @@ import (
 
 func TestPQDNSCryptEnable(t *testing.T) {
 	t.Parallel()
-	cat, err := LoadCatalog()
+	cat, err := LoadCatalog("")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func TestPQDNSCryptEnable(t *testing.T) {
 
 func TestPQDNSCryptInsertWhenAbsent(t *testing.T) {
 	t.Parallel()
-	cat, err := LoadCatalog()
+	cat, err := LoadCatalog("")
 	if err != nil {
 		t.Fatal(err)
 	}

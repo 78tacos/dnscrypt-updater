@@ -25,6 +25,7 @@
 
   $("search").addEventListener("input", () => render());
   $("save").addEventListener("click", save);
+  $("autostart").addEventListener("change", saveAutostart);
 
   function api(path, opts) {
     const u = new URL(path, location.origin);
@@ -75,10 +76,14 @@
 
   function render() {
     if (!state) return;
+    const source =
+      state.catalog && state.catalog.source === "install" ? "installed example" : "vendored example";
     $("meta").innerHTML =
-      "<div>Schema from DNSCrypt/dnscrypt-proxy <strong>" +
+      "<div>Schema <strong>" +
       esc(state.upstream_tag) +
-      "</strong></div><div><code>" +
+      "</strong> (" +
+      esc(source) +
+      ")</div><div><code>" +
       esc(state.toml_path || state.install_dir || "(not installed)") +
       "</code></div>";
 
@@ -92,12 +97,46 @@
     }
     $("save").disabled = !state.toml_exists;
 
+    renderAutostart();
     renderPending();
     renderSuggestions();
     renderPresets();
     renderEasy();
     renderAdvanced();
     renderFiles();
+  }
+
+  function renderAutostart() {
+    const card = $("autostart-card");
+    if (!state.autostart_label) {
+      card.classList.add("hidden");
+      return;
+    }
+    card.classList.remove("hidden");
+    $("autostart-label").textContent = state.autostart_label;
+    let help = state.autostart_help || "";
+    if (state.autostart_error) {
+      help = (help ? help + " " : "") + state.autostart_error;
+    }
+    $("autostart-help").textContent = help;
+    $("autostart").checked = !!state.autostart_enabled;
+  }
+
+  async function saveAutostart() {
+    const enabled = $("autostart").checked;
+    const res = await api("/api/autostart", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ enabled }),
+    });
+    if (!res.ok) {
+      showStatus("Could not update start-with-OS: " + (await res.text()), "warn");
+      $("autostart").checked = !enabled;
+      return;
+    }
+    const data = await res.json();
+    state.autostart_enabled = !!data.enabled;
+    $("autostart").checked = !!data.enabled;
   }
 
   function zipURL() {
@@ -269,6 +308,9 @@
       widget = '<input type="text" data-list="' + esc(f.path) + '" value="' + esc(list) + '" placeholder="comma-separated">';
     } else if (f.type === "int" || f.type === "float") {
       widget = '<input type="number" data-num="' + esc(f.path) + '" value="' + esc(val == null ? "" : String(val)) + '">';
+    } else if (f.type === "table") {
+      const shown = typeof val === "string" ? val : JSON.stringify(val || {}, null, 2);
+      widget = '<textarea data-raw="' + esc(f.path) + '">' + esc(shown) + "</textarea>";
     } else if (f.type === "inline_table_list") {
       widget =
         '<textarea data-json="' +
@@ -303,6 +345,7 @@
       (enabled ? "checked" : "") +
       "> enable</label><div><div class='title'>" +
       esc(f.key) +
+      (f.new_in ? ' <span class="badge">New in ' + esc(f.new_in) + "</span>" : "") +
       "</div><div class='path'>" +
       esc(f.path) +
       "</div></div></div><p class='help'>" +
@@ -346,6 +389,20 @@
           .map((s) => s.trim())
           .filter(Boolean);
         setEdit(el.dataset.list, { present: true, value: parts });
+      })
+    );
+    root.querySelectorAll("[data-raw]").forEach((el) =>
+      el.addEventListener("change", () => {
+        const text = el.value.trim();
+        let value = text;
+        if (text.startsWith("{") || text.startsWith("[")) {
+          try {
+            value = JSON.parse(text);
+          } catch (err) {
+            value = text;
+          }
+        }
+        setEdit(el.dataset.raw, { present: true, value });
       })
     );
     root.querySelectorAll("[data-json]").forEach((el) =>

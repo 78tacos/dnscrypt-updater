@@ -38,6 +38,20 @@ type Options struct {
 	OnPending      func(proxyconf.PendingStatus)
 	// ForceWriteErr is forwarded to proxyconf.ApplyEnv.WriteErr (tests).
 	ForceWriteErr error
+	// CatalogState is the path of the prior-catalog snapshot used for New-in badges.
+	// Empty disables persistence (the first view is always a baseline).
+	CatalogState string
+	// Autostart is the "start with the OS" control. Nil hides it.
+	Autostart Autostart
+}
+
+// Autostart reads and writes the per-user login item. Implementations must not
+// require administrator rights.
+type Autostart interface {
+	Label() string
+	Help() string
+	Enabled() (bool, error)
+	Set(enabled bool) error
 }
 
 // Server is a 127.0.0.1 HTTP UI.
@@ -51,7 +65,7 @@ type Server struct {
 }
 
 func New(opts Options) (*Server, error) {
-	cat, err := proxyconf.LoadCatalog()
+	cat, err := proxyconf.LoadCatalog("")
 	if err != nil {
 		return nil, err
 	}
@@ -97,6 +111,7 @@ func (s *Server) Handler() http.Handler {
 	})
 	mux.HandleFunc("/api/state", s.handleState)
 	mux.HandleFunc("/api/apply", s.handleApply)
+	mux.HandleFunc("/api/autostart", s.handleAutostart)
 	mux.HandleFunc("/api/pending.zip", s.handlePendingZip)
 	mux.HandleFunc("/api/pending", s.handlePending)
 	return mux
@@ -147,21 +162,25 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 }
 
 type snapshot struct {
-	Token          string                     `json:"token"`
-	UpstreamTag    string                     `json:"upstream_tag"`
-	InstallDir     string                     `json:"install_dir"`
-	BinaryPath     string                     `json:"binary_path"`
-	TomlPath       string                     `json:"toml_path"`
-	TomlExists     bool                       `json:"toml_exists"`
-	Writable       bool                       `json:"writable"`
-	NeedsElevation bool                       `json:"needs_elevation"`
-	Catalog        proxyconf.Catalog          `json:"catalog"`
-	Current        map[string]proxyconf.Value `json:"current"`
-	Files          []proxyconf.FileChange     `json:"files"`
-	Presets        []proxyconf.Preset         `json:"presets"`
-	Suggestions    []proxyconf.Suggestion     `json:"suggestions"`
-	MissingProxy   bool                       `json:"missing_proxy"`
-	Pending        proxyconf.PendingStatus    `json:"pending"`
+	Token            string                     `json:"token"`
+	UpstreamTag      string                     `json:"upstream_tag"`
+	InstallDir       string                     `json:"install_dir"`
+	BinaryPath       string                     `json:"binary_path"`
+	TomlPath         string                     `json:"toml_path"`
+	TomlExists       bool                       `json:"toml_exists"`
+	Writable         bool                       `json:"writable"`
+	NeedsElevation   bool                       `json:"needs_elevation"`
+	Catalog          proxyconf.Catalog          `json:"catalog"`
+	Current          map[string]proxyconf.Value `json:"current"`
+	Files            []proxyconf.FileChange     `json:"files"`
+	Presets          []proxyconf.Preset         `json:"presets"`
+	Suggestions      []proxyconf.Suggestion     `json:"suggestions"`
+	MissingProxy     bool                       `json:"missing_proxy"`
+	Pending          proxyconf.PendingStatus    `json:"pending"`
+	AutostartLabel   string                     `json:"autostart_label,omitempty"`
+	AutostartHelp    string                     `json:"autostart_help,omitempty"`
+	AutostartEnabled bool                       `json:"autostart_enabled"`
+	AutostartError   string                     `json:"autostart_error,omitempty"`
 }
 
 func (s *Server) locate() (installDir, binaryPath string, manageService bool) {
@@ -171,31 +190,59 @@ func (s *Server) locate() (installDir, binaryPath string, manageService bool) {
 	return "", "", false
 }
 
+// Reload reads the settings catalog again. Call it after a successful update.
+func (s *Server) Reload() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	dir, _, _ := s.locate()
+	s.loadBase(dir)
+}
+
+// loadBase replaces the cached catalog when installDir's example parses.
+// Caller holds s.mu.
+func (s *Server) loadBase(installDir string) proxyconf.Catalog {
+	cat, err := proxyconf.LoadCatalog(installDir)
+	if err != nil {
+		if s.opts.Log != nil {
+			s.opts.Log.Warn("reload settings catalog", "err", err)
+		}
+		return s.cat
+	}
+	s.cat = cat
+	return cat
+}
+
 func (s *Server) snapshot() (snapshot, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	installDir, binaryPath, manageService := s.locate()
 	_ = manageService
+	base := s.loadBase(installDir)
 	out := snapshot{
 		Token:       s.token,
-		UpstreamTag: s.cat.UpstreamTag,
+		UpstreamTag: base.UpstreamTag,
 		InstallDir:  installDir,
 		BinaryPath:  binaryPath,
 		TomlPath:    filepath.Join(installDir, "dnscrypt-proxy.toml"),
-		Catalog:     s.cat,
+		Catalog:     base,
 		Presets:     proxyconf.Presets(),
 		Current:     map[string]proxyconf.Value{},
 	}
+	s.fillAutostart(&out)
 	if installDir == "" {
 		out.MissingProxy = true
+		out.Catalog = s.annotate(base, "")
+		out.UpstreamTag = out.Catalog.UpstreamTag
 		return out, nil
 	}
+	var tomlRaw string
 	if _, err := os.Stat(out.TomlPath); err == nil {
 		out.TomlExists = true
 		raw, err := os.ReadFile(out.TomlPath)
 		if err != nil {
 			return out, err
 		}
-		out.Current = proxyconf.CurrentValues(string(raw), s.cat)
-		out.Suggestions = proxyconf.Suggestions(s.cat, out.Current)
+		tomlRaw = string(raw)
 		files, err := proxyconf.LoadListFiles(installDir)
 		if err != nil {
 			return out, err
@@ -203,6 +250,13 @@ func (s *Server) snapshot() (snapshot, error) {
 		out.Files = files
 	} else if !os.IsNotExist(err) {
 		return out, err
+	}
+	cat := s.annotate(base, tomlRaw)
+	out.Catalog = cat
+	out.UpstreamTag = cat.UpstreamTag
+	if tomlRaw != "" {
+		out.Current = proxyconf.CurrentValues(tomlRaw, cat)
+		out.Suggestions = proxyconf.Suggestions(cat, out.Current)
 	}
 	if binaryPath == "" {
 		out.MissingProxy = true
@@ -215,6 +269,41 @@ func (s *Server) snapshot() (snapshot, error) {
 	}
 	out.Pending = proxyconf.ReadPending(s.pendingDir())
 	return out, nil
+}
+
+// annotate applies New-in badges from the persisted prior catalog, then adds
+// live keys the example does not know. Caller holds s.mu.
+func (s *Server) annotate(base proxyconf.Catalog, tomlRaw string) proxyconf.Catalog {
+	snap, err := proxyconf.LoadCatalogSnapshot(s.opts.CatalogState)
+	if err != nil {
+		if s.opts.Log != nil {
+			s.opts.Log.Warn("catalog snapshot", "err", err)
+		}
+		snap = proxyconf.CatalogSnapshot{}
+	}
+	cat, snap, changed := proxyconf.AnnotateNew(base, snap)
+	if changed {
+		if err := proxyconf.SaveCatalogSnapshot(s.opts.CatalogState, snap); err != nil && s.opts.Log != nil {
+			s.opts.Log.Warn("save catalog snapshot", "err", err)
+		}
+	}
+	if strings.TrimSpace(tomlRaw) != "" {
+		cat = cat.WithUnknownLive(tomlRaw)
+	}
+	return cat
+}
+
+func (s *Server) fillAutostart(out *snapshot) {
+	if s.opts.Autostart == nil {
+		return
+	}
+	out.AutostartLabel = s.opts.Autostart.Label()
+	out.AutostartHelp = s.opts.Autostart.Help()
+	on, err := s.opts.Autostart.Enabled()
+	out.AutostartEnabled = on && err == nil
+	if err != nil {
+		out.AutostartError = err.Error()
+	}
 }
 
 func (s *Server) pendingDir() string {
@@ -281,7 +370,13 @@ func (s *Server) apply(ctx context.Context, req proxyconf.ApplyRequest) (proxyco
 		return proxyconf.ApplyResult{}, err
 	}
 	defer func() { _ = os.RemoveAll(staging) }()
-	if err := proxyconf.Stage(installDir, staging, req, s.cat); err != nil {
+	base := s.loadBase(installDir)
+	raw, err := os.ReadFile(toml)
+	if err != nil {
+		return proxyconf.ApplyResult{}, err
+	}
+	cat := base.WithUnknownLive(string(raw))
+	if err := proxyconf.Stage(installDir, staging, req, cat); err != nil {
 		return proxyconf.ApplyResult{}, err
 	}
 	env := proxyconf.ApplyEnv{
@@ -306,8 +401,51 @@ func (s *Server) apply(ctx context.Context, req proxyconf.ApplyRequest) (proxyco
 	if err != nil {
 		return res, err
 	}
+	// The example on disk may have changed during an update that landed while
+	// this page was open. Reload so the next state request is not stale.
+	s.loadBase(installDir)
 	s.notifyPending()
 	return res, nil
+}
+
+func (s *Server) handleAutostart(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method", http.StatusMethodNotAllowed)
+		return
+	}
+	if !s.tokenOK(r) {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if s.opts.Autostart == nil {
+		http.Error(w, "autostart is not available", http.StatusNotImplemented)
+		return
+	}
+	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		http.Error(w, "invalid json: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := s.opts.Autostart.Set(req.Enabled); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	on, err := s.opts.Autostart.Enabled()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, map[string]any{
+		"enabled": on,
+		"label":   s.opts.Autostart.Label(),
+	})
 }
 
 func (s *Server) handlePendingZip(w http.ResponseWriter, r *http.Request) {

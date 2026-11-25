@@ -2,6 +2,7 @@ package proxyconf
 
 import (
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 	"unicode"
@@ -118,6 +119,9 @@ func parseExampleTOML(src string, types map[string]string) (Catalog, error) {
 		cat.Fields[i].Easy = easy[cat.Fields[i].Path]
 	}
 	cat.CompanionFiles = companionLiveNames()
+	if len(cat.Fields) == 0 {
+		return cat, fmt.Errorf("example toml contained no settings")
+	}
 	return cat, nil
 }
 
@@ -334,29 +338,74 @@ func stripInlineComment(s string) string {
 }
 
 func inferType(path, raw string, types map[string]string) string {
-	if t := lookupType(types, path); t != "" && t != TypeTable && t != TypeTableMap {
+	// Vendored config.go wins. Keys it does not describe are inferred from the example value.
+	if t := lookupType(types, path); t != "" && t != TypeTable && t != TypeTableMap && t != TypeUnknown {
 		return t
 	}
+	return inferTypeFromExample(raw)
+}
+
+// inferTypeFromExample maps an example value to a UI type hint.
+// bool, int, float, string, array (string_list / int_list / inline_table_list), or table.
+// Anything else is a string.
+func inferTypeFromExample(raw string) string {
 	s := strings.TrimSpace(raw)
-	switch {
-	case s == "true" || s == "false":
+	switch s {
+	case "true", "false":
 		return TypeBool
-	case strings.HasPrefix(s, "["):
-		if strings.Contains(s, "{") {
-			return TypeInlineTableList
-		}
-		return TypeStringList
-	case strings.ContainsAny(s, `"'`):
+	}
+	if s == "" {
 		return TypeString
-	default:
-		if _, err := strconv.ParseInt(s, 10, 64); err == nil {
-			return TypeInt
-		}
+	}
+	if strings.HasPrefix(s, "[") {
+		return inferArrayType(s)
+	}
+	if strings.HasPrefix(s, "{") {
+		return TypeTable
+	}
+	if strings.HasPrefix(s, "\"") || strings.HasPrefix(s, "'") {
+		return TypeString
+	}
+	if _, err := strconv.ParseInt(s, 10, 64); err == nil {
+		return TypeInt
+	}
+	if strings.ContainsAny(s, ".eE") {
 		if _, err := strconv.ParseFloat(s, 64); err == nil {
 			return TypeFloat
 		}
-		return TypeString
 	}
+	return TypeString
+}
+
+func inferArrayType(s string) string {
+	if strings.Contains(s, "{") {
+		return TypeInlineTableList
+	}
+	inner := strings.TrimSpace(s)
+	if strings.HasPrefix(inner, "[") {
+		inner = strings.TrimSpace(inner[1:])
+	}
+	if strings.HasSuffix(inner, "]") {
+		inner = strings.TrimSpace(inner[:len(inner)-1])
+	}
+	if strings.TrimSpace(inner) == "" {
+		return TypeStringList
+	}
+	allInt := false
+	for _, p := range splitTOMLList(inner) {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		allInt = true
+		if _, err := strconv.ParseInt(p, 10, 64); err != nil {
+			return TypeStringList
+		}
+	}
+	if allInt {
+		return TypeIntList
+	}
+	return TypeStringList
 }
 
 func decodeTOMLScalar(raw, typ string) (any, error) {

@@ -65,6 +65,10 @@ func TestStateAndApplyToken(t *testing.T) {
 	if _, ok := st.Catalog.FieldByPath("monitoring_ui.enabled"); !ok {
 		t.Fatal("catalog missing monitoring_ui.enabled")
 	}
+	other, ok := st.Catalog.FieldByPath("unknown_future_key")
+	if !ok || other.Section != proxyconf.OtherSectionID || other.Type != proxyconf.TypeInt {
+		t.Fatalf("other field %+v ok=%v", other, ok)
+	}
 
 	body := `{"patches":[{"path":"force_tcp","enabled":true,"value":true}]}`
 	req, _ = http.NewRequest(http.MethodPost, ts.URL+"/api/apply?token="+srv.token, strings.NewReader(body))
@@ -291,5 +295,120 @@ func TestApplyQueuesPendingOnElevationDecline(t *testing.T) {
 	}
 	if proxyconf.ReadPending(pending).Present {
 		t.Fatal("pending still present")
+	}
+}
+
+type fakeAutostart struct {
+	on bool
+}
+
+func (f *fakeAutostart) Label() string          { return "Start with Linux" }
+func (f *fakeAutostart) Help() string           { return "test help" }
+func (f *fakeAutostart) Enabled() (bool, error) { return f.on, nil }
+func (f *fakeAutostart) Set(enabled bool) error {
+	f.on = enabled
+	return nil
+}
+
+func TestDynamicCatalogAndAutostart(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	statePath := filepath.Join(t.TempDir(), "catalog-snapshot.json")
+	example := "listen_addresses = ['127.0.0.1:53']\ncache = true\n"
+	writeExample := func(body, tag string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(dir, proxyconf.ExampleTOMLName), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, proxyconf.ExampleTagName), []byte(tag+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeExample(example, "2.1.18")
+	toml := filepath.Join(dir, "dnscrypt-proxy.toml")
+	if err := os.WriteFile(toml, []byte("listen_addresses = ['127.0.0.1:53']\ncustom_only = 'z'\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	auto := &fakeAutostart{}
+	srv, err := New(Options{
+		Locate:       func() (string, string, bool) { return dir, filepath.Join(dir, "dnscrypt-proxy"), false },
+		Check:        func(context.Context, string, string) error { return nil },
+		CatalogState: statePath,
+		Autostart:    auto,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := httptest.NewServer(srv.Handler())
+	t.Cleanup(ts.Close)
+
+	get := func() snapshot {
+		t.Helper()
+		req, _ := http.NewRequest(http.MethodGet, ts.URL+"/api/state?token="+srv.token, nil)
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		if res.StatusCode != 200 {
+			b, _ := io.ReadAll(res.Body)
+			t.Fatalf("state %d %s", res.StatusCode, b)
+		}
+		var st snapshot
+		if err := json.NewDecoder(res.Body).Decode(&st); err != nil {
+			t.Fatal(err)
+		}
+		return st
+	}
+
+	st := get()
+	if st.Catalog.Source != proxyconf.CatalogSourceInstall || st.UpstreamTag != "2.1.18" {
+		t.Fatalf("source %q tag %q", st.Catalog.Source, st.UpstreamTag)
+	}
+	if f, ok := st.Catalog.FieldByPath("brand_new_flag"); ok {
+		t.Fatalf("baseline should not have brand_new_flag %+v", f)
+	}
+	custom, ok := st.Catalog.FieldByPath("custom_only")
+	if !ok || custom.Section != proxyconf.OtherSectionID || custom.Type != proxyconf.TypeString {
+		t.Fatalf("custom %+v", custom)
+	}
+	if st.AutostartLabel != "Start with Linux" || st.AutostartEnabled {
+		t.Fatalf("autostart %+v", st.AutostartLabel)
+	}
+	for _, f := range st.Catalog.Fields {
+		if f.NewIn != "" {
+			t.Fatalf("baseline badge on %s", f.Path)
+		}
+	}
+
+	writeExample(example+"brand_new_flag = true\n", "2.1.19")
+	srv.Reload()
+	st = get()
+	flag, ok := st.Catalog.FieldByPath("brand_new_flag")
+	if !ok || flag.Type != proxyconf.TypeBool || flag.NewIn != "2.1.19" {
+		t.Fatalf("new flag %+v ok=%v", flag, ok)
+	}
+	listen, _ := st.Catalog.FieldByPath("listen_addresses")
+	if listen.NewIn != "" {
+		t.Fatalf("old key badged %q", listen.NewIn)
+	}
+
+	req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/autostart?token="+srv.token, strings.NewReader(`{"enabled":true}`))
+	req.Header.Set("Content-Type", "application/json")
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer res.Body.Close()
+	if res.StatusCode != 200 {
+		b, _ := io.ReadAll(res.Body)
+		t.Fatalf("autostart %d %s", res.StatusCode, b)
+	}
+	if !auto.on {
+		t.Fatal("autostart was not enabled")
+	}
+	st = get()
+	if !st.AutostartEnabled {
+		t.Fatal("state did not reflect autostart")
 	}
 }

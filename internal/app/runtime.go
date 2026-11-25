@@ -19,6 +19,7 @@ import (
 	"github.com/78tacos/dnscrypt-updater/internal/githubrel"
 	"github.com/78tacos/dnscrypt-updater/internal/notify"
 	"github.com/78tacos/dnscrypt-updater/internal/openurl"
+	"github.com/78tacos/dnscrypt-updater/internal/settingsui"
 )
 
 const AppName = "dnscrypt-proxy-updater"
@@ -66,6 +67,7 @@ type Runtime struct {
 
 	settingsMu  sync.Mutex
 	settingsURL string
+	settingsSrv *settingsui.Server
 	menuPing    chan struct{}
 }
 
@@ -349,6 +351,7 @@ func (rt *Runtime) Install(ctx context.Context) (apply.Result, error) {
 			out.Message = fmt.Sprintf("Installed dnscrypt-proxy %s at %s.", res.LocalVersion, res.BinaryPath)
 		}
 		out.Elevated = true
+		rt.reloadSettingsCatalog()
 		return out, nil
 	}
 
@@ -372,7 +375,17 @@ func (rt *Runtime) Install(ctx context.Context) (apply.Result, error) {
 	if _, perr := rt.poll(ctx, false); perr != nil {
 		rt.Log.Warn("post-install check", "err", perr)
 	}
+	rt.reloadSettingsCatalog()
 	return res, nil
+}
+
+func (rt *Runtime) reloadSettingsCatalog() {
+	rt.settingsMu.Lock()
+	srv := rt.settingsSrv
+	rt.settingsMu.Unlock()
+	if srv != nil {
+		srv.Reload()
+	}
 }
 
 // installSetsSystemDNS reports whether this install should point adapters at the local proxy.

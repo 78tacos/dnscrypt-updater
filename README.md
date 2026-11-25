@@ -34,9 +34,13 @@ Linux/macOS: files go to `/opt/dnscrypt-proxy` (needs root). Automatic DNS chang
 
 Tray **Configure dnscrypt-proxy…** (or `-configure`) opens a **127.0.0.1** page in the default browser. It is not SimpleDnsCrypt and it is not the proxy’s own `[monitoring_ui]` dashboard.
 
-- Forms are generated from the vendored official `example-dnscrypt-proxy.toml` (pinned DNSCrypt/dnscrypt-proxy tag in [`internal/proxyconf/upstream/VERSION`](internal/proxyconf/upstream/VERSION)).
+- Forms prefer the `example-dnscrypt-proxy.toml` copied into the install directory on every update. If that file is missing or does not parse, the page uses the vendored copy pinned in [`internal/proxyconf/upstream/VERSION`](internal/proxyconf/upstream/VERSION). The catalog is read again after a successful update or apply. It is not cached for the life of the process.
+- Keys that are not in the vendored `config.go` get a type hint from the example value (bool, int, float, string, array, or table). Anything else is a string.
+- Keys that are in your live `dnscrypt-proxy.toml` but not in the catalog show up under **Other**.
+- Options added since the previous catalog version show a **New in &lt;version&gt;** badge. The previous key set and version are stored in `catalog-snapshot.json` next to the updater config.
 - **Easy** tab: common keys, presets (overlays, not a full rewrite), clickable examples from upstream comments, and dismissible suggestions.
-- **Advanced** tab: the full generated catalog.
+- **Advanced** tab: the full catalog, including Other and New-in badges.
+- **Start with Windows** / **Start with Linux** / **Start at login**: a checkbox for this updater (see below). It is also on the tray menu.
 - **List files**: `forwarding-rules.txt`, `cloaking-rules.txt`, block/allow lists, captive-portal map. Auto-downloaded `public-resolvers.md` / relays caches are not rewritten.
 - Save stages the patched toml, runs `dnscrypt-proxy -check` on that candidate, and refuses to write if the check fails (the error is shown in the page). Each overwritten file is copied to a timestamped backup (`dnscrypt-proxy.toml.YYYYMMDDTHHMMSSZ.bak`) first. On Windows, a toml under Program Files, or any file that is not writable, is applied by a one-shot elevated process (`-apply-config` via ShellExecuteEx UAC) while the tray stays in userspace. Other folders are written in place after the service is stopped. If UAC is declined or elevation is unavailable, the checked files are queued in the user config `pending` folder (`%APPDATA%\dnscrypt-proxy-updater\pending` on Windows). Download a zip from the settings page, or right-click the tray and choose **Apply pending settings**. Linux/macOS: same queue, then tray apply or `sudo dnscrypt-proxy-updater -apply-pending`. Invalid `-check` results are never queued. The settings UI does **not** keep `dnscrypt-proxy.toml` open.
 
@@ -44,7 +48,7 @@ Tray **Configure dnscrypt-proxy…** (or `-configure`) opens a **127.0.0.1** pag
 dnscrypt-proxy-updater -configure
 ```
 
-When official dnscrypt-proxy adds or changes config keys, refresh the pin and rebuild this updater:
+The page can show keys from a newer installed example before this repository's pin moves. When official dnscrypt-proxy adds or changes config keys, refresh the pin and rebuild this updater:
 
 ```bash
 ./scripts/vendor-dnscrypt-schema.sh          # latest official tag
@@ -117,7 +121,7 @@ ARM64:
 GOOS=windows GOARCH=arm64 CGO_ENABLED=0 go build -ldflags "-H=windowsgui -s -w" -o dnscrypt-proxy-updater-arm64.exe ./cmd/dnscrypt-proxy-updater
 ```
 
-Run `dnscrypt-proxy-updater.exe`. The tray menu shows local vs GitHub, **Check now**, **Configure dnscrypt-proxy…**, **Apply pending settings** (when a save could not write the install dir), **Open GitHub release page**, and **Quit**. Less common actions (**Install / Update**, **Skip this version**, **Snooze 24 hours**) live under **More**.
+Run `dnscrypt-proxy-updater.exe`. The tray menu shows local vs GitHub, **Check now**, **Configure dnscrypt-proxy…**, **Start with Windows** (or the label for this OS), **Apply pending settings** (when a save could not write the install dir), **Open GitHub release page**, and **Quit**. Less common actions (**Install / Update**, **Skip this version**, **Snooze 24 hours**) live under **More**. The start-with-OS item is checked when the login entry exists.
 
 A second launch of the tray exits and says the app is already running in the system tray. `-install` (including the elevated `-install -quiet` relaunch), `-check-once`, and `-version` do not take that lock.
 
@@ -155,19 +159,21 @@ CLI: `-install`, `-configure`, `-apply-pending`, `-apply-config` (internal, afte
 
 ### Quiet / start with the OS
 
+The settings page and the tray menu share one checkbox. It reflects the current login entry and does not ask for administrator or root. Installing the proxy as a service is separate and still requires elevation on Windows.
+
 **Windows**
 
 - Release builds use `-H=windowsgui` so there is no console.
-- Start with Windows: copy a shortcut to `shell:startup`, or a Task Scheduler task ("At log on", hidden, action = `dnscrypt-proxy-updater.exe`).
-- Installing the proxy as a service still requires Administrator (UAC).
+- **Start with Windows** writes or removes `dnscrypt-proxy-updater` under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` (current user, no UAC). The value is the path to this executable, quoted when it contains spaces.
+- A Startup-folder shortcut or a Task Scheduler task ("At log on", hidden) still works if you prefer those.
 
 **Linux**
 
-- XDG Autostart: `~/.config/autostart/dnscrypt-proxy-updater.desktop`.
+- **Start with Linux** writes or removes `dnscrypt-proxy-updater.desktop`. The directory is `$XDG_CONFIG_HOME/autostart` when `XDG_CONFIG_HOME` is set, and `~/.config/autostart` otherwise.
 
 **macOS**
 
-- Login Item, or a LaunchAgent with `RunAtLoad`.
+- **Start at login** writes or removes `~/Library/LaunchAgents/com.78tacos.dnscrypt-proxy-updater.plist` with `RunAtLoad`. It applies at the next login.
 
 ---
 

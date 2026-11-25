@@ -211,6 +211,9 @@ func (a *Applier) Apply(ctx context.Context, archive githubrel.SignedArchive, ta
 	if err != nil {
 		return out, err
 	}
+	if err := writeExampleTag(destDir, out.Version); err != nil {
+		a.log().Warn("write example version tag", "err", err)
+	}
 	out.BinaryPath = binPath
 	out.BackupPath = backup
 	out.FreshInstall = fresh

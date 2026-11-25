@@ -254,6 +254,9 @@ func encodeTOML(v any, typ string) string {
 	case json.Number:
 		return val.String()
 	case string:
+		if rawTOMLContainer(val) && (typ == TypeTable || typ == TypeInlineTableList || typ == TypeUnknown) {
+			return strings.TrimSpace(val)
+		}
 		return quoteTOML(val)
 	case []any:
 		if typ == TypeInlineTableList {
@@ -311,6 +314,15 @@ func encodeInlineTable(m map[string]any) string {
 		parts = append(parts, k+" = "+encodeTOML(m[k], TypeUnknown))
 	}
 	return "{ " + strings.Join(parts, ", ") + " }"
+}
+
+func rawTOMLContainer(s string) bool {
+	s = strings.TrimSpace(s)
+	if len(s) < 2 {
+		return false
+	}
+	return (strings.HasPrefix(s, "{") && strings.HasSuffix(s, "}")) ||
+		(strings.HasPrefix(s, "[") && strings.HasSuffix(s, "]"))
 }
 
 func quoteTOML(s string) string {
