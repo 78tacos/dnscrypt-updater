@@ -10,6 +10,8 @@ import (
 
 type systemRegistry struct{}
 
+func realRegistry() RegistryStore { return systemRegistry{} }
+
 func openRunKey(writable bool) (registry.Key, error) {
 	access := uint32(registry.QUERY_VALUE)
 	if writable {
