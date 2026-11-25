@@ -306,3 +306,37 @@ func TestAnnotateNewBadges(t *testing.T) {
 		t.Fatalf("snapshot %s", raw)
 	}
 }
+
+func TestVendoredCatalogBadgesKeysAddedSincePriorPin(t *testing.T) {
+	t.Parallel()
+	cat, err := LoadCatalog("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const added = "doh_check_cert_hashes_on_connect"
+	if _, ok := cat.FieldByPath(added); !ok {
+		t.Fatalf("vendored catalog missing %s", added)
+	}
+	prior := make([]string, 0, len(cat.Fields))
+	for _, key := range catalogKeys(cat) {
+		if key != added {
+			prior = append(prior, key)
+		}
+	}
+	marked, _, changed := AnnotateNew(cat, CatalogSnapshot{Version: "2.1.18", Keys: prior})
+	if !changed {
+		t.Fatal("a new key should update the snapshot")
+	}
+	f, ok := marked.FieldByPath(added)
+	if !ok {
+		t.Fatal("new key dropped")
+	}
+	if f.NewIn != GeneratedUpstreamTag {
+		t.Fatalf("NewIn %q want %q", f.NewIn, GeneratedUpstreamTag)
+	}
+	for _, field := range marked.Fields {
+		if field.Path != added && field.NewIn != "" {
+			t.Fatalf("unexpected badge on %s: %q", field.Path, field.NewIn)
+		}
+	}
+}

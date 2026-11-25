@@ -52,7 +52,7 @@ The page can show keys from a newer installed example before this repository's p
 
 ```bash
 ./scripts/vendor-dnscrypt-schema.sh          # latest official tag
-# or: ./scripts/vendor-dnscrypt-schema.sh 2.1.18
+# or: ./scripts/vendor-dnscrypt-schema.sh 2.1.21
 go generate ./internal/proxyconf
 go test ./...
 ```

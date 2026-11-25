@@ -79,6 +79,10 @@ func TestLoadCatalog(t *testing.T) {
 	if mon.Type != TypeBool {
 		t.Fatalf("monitoring type %s", mon.Type)
 	}
+	doh, ok := cat.FieldByPath("doh_check_cert_hashes_on_connect")
+	if !ok || doh.Type != TypeBool || !doh.Commented {
+		t.Fatalf("2.1.21 doh cert-hash field %+v ok=%v", doh, ok)
+	}
 	if ValidatePresets(cat) != nil {
 		t.Fatal(ValidatePresets(cat))
 	}
